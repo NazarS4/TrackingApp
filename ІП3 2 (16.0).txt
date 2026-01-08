@@ -1,0 +1,4558 @@
+ПАПКА CONFIG
+========================
+
+AppConfig.cs
+=====
+
+// Config/AppConfig.cs - ПОВНИЙ КОД ДЛЯ ВАРІАНТУ 3
+namespace TrackingApp.Config
+{
+    public static class AppConfig
+    {
+        // Режим роботи: Local (мок-дані) або Server (реальний сервер)
+        public static bool UseServerMode { get; set; } = true;
+
+        // TCP налаштування (замість HTTP)
+        public static string ServerHost { get; set; } = "localhost";
+        public static int ServerPort { get; set; } = 8888;
+
+        // Таймаути для запитів
+        public static int RequestTimeoutSeconds { get; set; } = 10;
+
+        // Налаштування для локального режиму
+        public static string LocalDataFile { get; set; } = "local_data.json";
+
+        // Метод для перевірки конфігурації
+        public static void LogConfiguration()
+        {
+            System.Diagnostics.Debug.WriteLine("=== КОНФІГУРАЦІЯ КЛІЄНТА ===");
+            System.Diagnostics.Debug.WriteLine($"UseServerMode: {UseServerMode}");
+            System.Diagnostics.Debug.WriteLine($"TCP Server: {ServerHost}:{ServerPort}");
+            System.Diagnostics.Debug.WriteLine($"RequestTimeout: {RequestTimeoutSeconds}s");
+            System.Diagnostics.Debug.WriteLine($"LocalDataFile: {LocalDataFile}");
+            System.Diagnostics.Debug.WriteLine("===========================");
+        }
+    }
+}
+
+
+
+--------------------------------------------------------------------
+
+
+ПАПКА CONVERTERS
+==============================
+
+BooleanToVisibilityConverter.cs
+=====
+
+
+using System;
+using System.Windows;
+using System.Windows.Data;
+
+namespace TrackingApp.Converters
+{
+    public class BooleanToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            return (value is bool && (bool)value) ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+}
+
+
+
+
+---------------------------------------------------------------
+
+
+BoolToBrushConverter.cs
+=====
+
+
+using System;
+using System.Globalization;
+using System.Windows.Data;
+using System.Windows.Media;
+
+namespace TrackingApp.Converters
+{
+    public class BoolToBrushConverter : IValueConverter
+    {
+        public Brush? LeaderBrush { get; set; } = Brushes.Red;
+        public Brush? DefaultBrush { get; set; } = Brushes.Green;
+
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is bool b && b)
+                return LeaderBrush ?? Brushes.Red;
+            return DefaultBrush ?? Brushes.Green;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotImplementedException();
+    }
+}
+
+
+
+
+------------------------------------------------------------------------------
+
+
+
+ПАПКА Infrastructure
+==========================
+
+
+// Infrastructure/HttpClientFactory.cs
+using TrackingApp.Config;
+using TrackingApp.Infrastructure;
+
+public static class HttpClientFactory
+{
+    public static IHttpClient CreateClient()
+    {
+        return AppConfig.UseServerMode
+            ? new TcpClientService()  // Змінити на TCP клієнт!
+            : new LocalHttpClient();
+    }
+}
+
+
+
+----------------------------------------------------------------------------
+
+
+
+IHttpClient.cs
+====
+
+
+
+using System.Threading.Tasks;
+
+namespace TrackingApp.Infrastructure
+{
+    public interface IHttpClient
+    {
+        Task<T> GetAsync<T>(string endpoint);
+        Task<T> PostAsync<T>(string endpoint, object data);
+        Task<T> PutAsync<T>(string endpoint, object data);
+        Task<bool> DeleteAsync(string endpoint);
+    }
+}
+
+
+
+---------------------------------------------------------------------
+
+
+
+LocalHttpClient.cs
+===
+
+
+using System;
+using System.Threading.Tasks;
+using System.Linq;
+using TrackingApp.Config;
+using TrackingApp.Services;
+using TrackingApp.Models;
+
+namespace TrackingApp.Infrastructure
+{
+    public class LocalHttpClient : IHttpClient
+    {
+        private readonly LocalDataService _localData;
+
+        public LocalHttpClient()
+        {
+            _localData = new LocalDataService();
+        }
+
+        public async Task<T> GetAsync<T>(string endpoint)
+        {
+            // Імітація мережевої затримки
+            await Task.Delay(new Random().Next(50, 200));
+
+            try
+            {
+                object result = endpoint switch
+                {
+                    "/api/users" => _localData.GetUsers(),
+                    "/api/trip/current" => _localData.GetCurrentTrip(),
+                    "/api/notifications" => _localData.GetNotifications(),
+                    _ => throw new ArgumentException($"Unknown endpoint: {endpoint}")
+                };
+
+                // Створюємо успішну відповідь
+                var response = new ApiResponse<object>
+                {
+                    Success = true,
+                    Message = "Success",
+                    Data = result
+                };
+
+                return (T)Convert.ChangeType(response, typeof(T));
+            }
+            catch (Exception ex)
+            {
+                // Створюємо відповідь з помилкою
+                var response = new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = ex.Message,
+                    Data = null,
+                    ErrorCode = "LOCAL_ERROR"
+                };
+
+                return (T)Convert.ChangeType(response, typeof(T));
+            }
+        }
+
+        public async Task<T> PostAsync<T>(string endpoint, object data)
+        {
+            await Task.Delay(new Random().Next(100, 300));
+
+            try
+            {
+                // Обробка різних endpoint'ів
+                switch (endpoint)
+                {
+                    case "/api/notifications":
+                        if (data is Notification notification)
+                        {
+                            _localData.AddNotification(notification);
+                        }
+                        break;
+                    case "/api/auth/register":
+                        // Логіка реєстрації
+                        break;
+                }
+
+                var response = new ApiResponse<bool>
+                {
+                    Success = true,
+                    Message = "Operation completed",
+                    Data = true
+                };
+
+                return (T)Convert.ChangeType(response, typeof(T));
+            }
+            catch (Exception ex)
+            {
+                var response = new ApiResponse<bool>
+                {
+                    Success = false,
+                    Message = ex.Message,
+                    Data = false
+                };
+
+                return (T)Convert.ChangeType(response, typeof(T));
+            }
+        }
+
+        public async Task<T> PutAsync<T>(string endpoint, object data)
+        {
+            await Task.Delay(new Random().Next(100, 300));
+
+            try
+            {
+                // Обробка оновлень
+                switch (endpoint)
+                {
+                    case "/api/trip":
+                        if (data is Trip trip)
+                        {
+                            _localData.UpdateTrip(trip);
+                        }
+                        break;
+                    case string s when s.StartsWith("/api/users/") && s.EndsWith("/location"):
+                        if (data is Location location)
+                        {
+                            // Оновлення локації користувача
+                            var userId = endpoint.Split('/')[3];
+                            var users = _localData.GetUsers();
+                            var user = users.FirstOrDefault(u => u.Id == userId);
+                            if (user != null)
+                            {
+                                user.CurrentLocation = location;
+                                _localData.SaveUser(user);
+                            }
+                        }
+                        break;
+                }
+
+                var response = new ApiResponse<bool>
+                {
+                    Success = true,
+                    Message = "Update completed",
+                    Data = true
+                };
+
+                return (T)Convert.ChangeType(response, typeof(T));
+            }
+            catch (Exception ex)
+            {
+                var response = new ApiResponse<bool>
+                {
+                    Success = false,
+                    Message = ex.Message,
+                    Data = false
+                };
+
+                return (T)Convert.ChangeType(response, typeof(T));
+            }
+        }
+
+        public async Task<bool> DeleteAsync(string endpoint)
+        {
+            await Task.Delay(new Random().Next(100, 300));
+            return true;
+        }
+    }
+}
+
+
+
+
+------------------------------------------------------------------------
+
+
+TcpClientService.cs
+===
+
+
+
+// Infrastructure/TcpClientService.cs
+using System;
+using System.IO;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using TrackingApp.Config;
+using TrackingApp.Services;
+
+namespace TrackingApp.Infrastructure
+{
+    public class TcpClientService : IHttpClient
+    {
+        private readonly JsonSerializerOptions _jsonOptions;
+
+        public TcpClientService()
+        {
+            _jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = true
+            };
+        }
+
+        private string GetCommandFromEndpoint(string endpoint, string method)
+        {
+            var endpointLower = endpoint.ToLower();
+
+            System.Diagnostics.Debug.WriteLine($"🔍 GetCommandFromEndpoint: {endpoint}, метод: {method}");
+
+            if (endpointLower == "/api/ping") return "ping";
+            if (endpointLower == "/api/users") return "get_users";
+            if (endpointLower == "/api/trip/current") return "get_active_trip";
+            if (endpointLower == "/api/trip/active") return "get_active_trip";
+            if (endpointLower == "/api/notifications")
+                return method == "GET" ? "get_notifications" : "add_notification";
+            if (endpointLower.StartsWith("/api/users/") && endpointLower.EndsWith("/location"))
+                return "update_location";
+            if (endpointLower == "/api/statistics")
+                return "get_statistics";
+            if (endpointLower == "/api/auth/register")
+                return "register_user";
+            if (endpointLower == "/api/auth/login")
+                return "get_users";
+            if (endpointLower == "/api/feedback")
+                return "add_feedback";
+            if (endpointLower == "/api/trips/predefined")
+                return "get_predefined_trips";
+            if (endpointLower == "/api/trips/set_active")
+                return "set_active_trip";
+            if (endpointLower == "/api/trips/save_predefined")
+                return "save_predefined_trip";
+
+            // ДОДАНО: Команда для оновлення плану подорожі
+            if (endpointLower == "/api/trip/plan/update")
+                return "update_trip_plan";
+
+            System.Diagnostics.Debug.WriteLine($"⚠️ Невідома команда для: {endpoint}, метод: {method}");
+            return "unknown";
+        }
+
+        public async Task<T> GetAsync<T>(string endpoint)
+        {
+            try
+            {
+                var command = GetCommandFromEndpoint(endpoint, "GET");
+                var request = new { Command = command, Data = new { } };
+                return await SendTcpRequest<T>(request);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка GetAsync для {endpoint}: {ex.Message}");
+                throw;
+            }
+        }
+
+        public async Task<T> PostAsync<T>(string endpoint, object data)
+        {
+            try
+            {
+                var command = GetCommandFromEndpoint(endpoint, "POST");
+                var request = new { Command = command, Data = data };
+                return await SendTcpRequest<T>(request);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка PostAsync для {endpoint}: {ex.Message}");
+                throw;
+            }
+        }
+
+        public async Task<T> PutAsync<T>(string endpoint, object data)
+        {
+            try
+            {
+                var command = GetCommandFromEndpoint(endpoint, "PUT");
+                var request = new { Command = command, Data = data };
+                return await SendTcpRequest<T>(request);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка PutAsync для {endpoint}: {ex.Message}");
+                throw;
+            }
+        }
+
+        public async Task<bool> DeleteAsync(string endpoint)
+        {
+            try
+            {
+                var request = new { Command = "delete", Data = new { endpoint } };
+                var result = await SendTcpRequest<object>(request);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка DeleteAsync для {endpoint}: {ex.Message}");
+                return false;
+            }
+        }
+
+        private async Task<T> SendTcpRequest<T>(object request)
+        {
+            TcpClient client = null;
+            try
+            {
+                var jsonRequest = JsonSerializer.Serialize(request, _jsonOptions);
+                System.Diagnostics.Debug.WriteLine($"📤 TCP ВІДПРАВКА до {AppConfig.ServerHost}:{AppConfig.ServerPort}");
+                System.Diagnostics.Debug.WriteLine($"📄 Запит: {jsonRequest}");
+
+                client = new TcpClient();
+
+                var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+                var connectTask = client.ConnectAsync(AppConfig.ServerHost, AppConfig.ServerPort);
+                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5));
+
+                var completedTask = await Task.WhenAny(connectTask, timeoutTask);
+
+                if (completedTask == timeoutTask)
+                {
+                    System.Diagnostics.Debug.WriteLine("❌ ТАЙМАУТ ПІДКЛЮЧЕННЯ: Сервер не відповідає протягом 5 секунд");
+                    throw new TimeoutException("Сервер не відповідає");
+                }
+
+                if (!client.Connected)
+                {
+                    System.Diagnostics.Debug.WriteLine("❌ НЕ ВДАЛОСЯ ПІДКЛЮЧИТИСЯ: Client.Connected = false");
+                    throw new Exception("Не вдалося підключитися до сервера");
+                }
+
+                System.Diagnostics.Debug.WriteLine("✅ УСПІШНО ПІДКЛУЧЕНО ДО СЕРВЕРА");
+
+                using var stream = client.GetStream();
+
+                using var writer = new StreamWriter(stream, encoding);
+                using var reader = new StreamReader(stream, encoding);
+
+                await writer.WriteAsync(jsonRequest);
+                await writer.FlushAsync();
+
+                System.Diagnostics.Debug.WriteLine("✅ ЗАПИТ ВІДПРАВЛЕНО");
+
+                var responseJson = await reader.ReadLineAsync();
+
+                if (string.IsNullOrEmpty(responseJson))
+                {
+                    System.Diagnostics.Debug.WriteLine("❌ ОТРИМАНО ПУСТУ ВІДПОВІДЬ");
+                    throw new Exception("Сервер повернув пусту відповідь");
+                }
+
+                System.Diagnostics.Debug.WriteLine($"📥 ОТРИМАНО ВІДПОВІДЬ: {responseJson}");
+
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<T>>(responseJson, _jsonOptions);
+
+                if (apiResponse?.Success == true)
+                {
+                    System.Diagnostics.Debug.WriteLine($"✅ ЗАПИТ УСПІШНИЙ: {apiResponse.Message}");
+                    return apiResponse.Data;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"❌ ПОМИЛКА ВІДПОВІДІ: {apiResponse?.Message}");
+                    throw new Exception(apiResponse?.Message ?? "Невідома помилка сервера");
+                }
+            }
+            catch (SocketException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ ПОМИЛКА SOCKET: {ex.SocketErrorCode} - {ex.Message}");
+                throw new Exception($"Помилка мережі: {ex.Message}");
+            }
+            catch (TimeoutException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ ТАЙМАУТ: {ex.Message}");
+                throw new Exception($"Таймаут підключення: {ex.Message}");
+            }
+            catch (JsonException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ ПОМИЛКА JSON: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"📍 Позиція: {ex.BytePositionInLine}, Лінія: {ex.LineNumber}");
+                throw new Exception($"Помилка формату даних: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ ЗАГАЛЬНА ПОМИЛКА: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"📍 Тип помилки: {ex.GetType().Name}");
+                throw;
+            }
+            finally
+            {
+                client?.Close();
+                client?.Dispose();
+            }
+        }
+    }
+}
+
+
+
+
+
+----------------------------------------------------------------------
+
+
+ПАПКА Models
+===========================
+
+
+Location.cs
+===
+
+
+
+
+namespace TrackingApp.Models
+{
+    public class Location
+    {
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+
+        public Location() { }
+
+        public Location(double lat, double lon)
+        {
+            Latitude = lat;
+            Longitude = lon;
+        }
+
+        public override string ToString() => $"{Latitude:F5}, {Longitude:F5}";
+    }
+}
+
+
+
+
+
+--------------------------------------------------------------------
+
+
+
+Notification.cs
+===
+
+
+
+using System;
+
+namespace TrackingApp.Models
+{
+    public class Notification
+    {
+        public DateTime Time { get; set; } = DateTime.Now;
+        public string Message { get; set; } = string.Empty;
+        public string UserId { get; set; } = string.Empty;
+        public string UserName { get; set; } = string.Empty;
+    }
+}
+
+
+
+
+---------------------------------------------------------------------
+
+
+
+PredefinedTrip.cs
+====
+
+
+using System.Collections.ObjectModel;
+
+namespace TrackingApp.Models
+{
+    public class PredefinedTrip
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public ObservableCollection<Location> Route { get; set; } = new ObservableCollection<Location>();
+        public string Duration { get; set; } = string.Empty;
+        public string BreakSchedule { get; set; } = string.Empty;
+        public ObservableCollection<string> RestPlaces { get; set; } = new ObservableCollection<string>();
+        public ObservableCollection<string> PointsOfInterest { get; set; } = new ObservableCollection<string>();
+        public bool IsActive { get; set; }
+        public bool IsPredefined { get; set; } = true;
+
+        public PredefinedTrip() { }
+
+        public PredefinedTrip(string name, string description)
+        {
+            Name = name;
+            Description = description;
+        }
+
+        public override string ToString() => Name;
+    }
+}
+
+
+
+
+-----------------------------------------------------------------
+
+Trip.cs
+===
+
+
+
+// Models/Trip.cs
+using System.Collections.ObjectModel;
+
+namespace TrackingApp.Models
+{
+    public class Trip
+    {
+        public string TripName { get; set; } = "Trip";
+        public ObservableCollection<Location> Route { get; set; } = new ObservableCollection<Location>();
+        public string Duration { get; set; } = "3 години";
+        public string BreakSchedule { get; set; } = "Перерва з 12:00 до 13:00";
+        public ObservableCollection<string> RestPlaces { get; set; } = new ObservableCollection<string>();
+        public ObservableCollection<string> PointsOfInterest { get; set; } = new ObservableCollection<string>();
+        public bool IsActive { get; set; } = true;
+    }
+}
+
+
+
+
+-------------------------------------------------------------------
+
+
+
+User.cs
+===
+
+
+using System;
+using System.ComponentModel;
+using System.Collections.ObjectModel;
+
+namespace TrackingApp.Models
+{
+    public enum UserStatus
+    {
+        None,
+        Help,
+        Stop
+    }
+
+    public enum TripType
+    {
+        Walking,
+        Cycling,
+        Excursion
+    }
+
+    public class User : INotifyPropertyChanged
+    {
+        private string _name = string.Empty;
+        private string _password = string.Empty;
+        private Location _currentLocation = new Location();
+        private bool _isLeader = false;
+        private UserStatus _status = UserStatus.None;
+        private string _email = string.Empty;
+        private TripType _tripType = TripType.Walking; // Default to Walking
+
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+
+        public string Name
+        {
+            get => _name;
+            set { _name = value; OnPropertyChanged(nameof(Name)); }
+        }
+
+        public string Password
+        {
+            get => _password;
+            set { _password = value; OnPropertyChanged(nameof(Password)); }
+        }
+
+        public Location CurrentLocation
+        {
+            get => _currentLocation;
+            set { _currentLocation = value; OnPropertyChanged(nameof(CurrentLocation)); }
+        }
+
+        public bool IsLeader
+        {
+            get => _isLeader;
+            set { _isLeader = value; OnPropertyChanged(nameof(IsLeader)); }
+        }
+
+        public UserStatus Status
+        {
+            get => _status;
+            set { _status = value; OnPropertyChanged(nameof(Status)); }
+        }
+
+        public string Email
+        {
+            get => _email;
+            set { _email = value; OnPropertyChanged(nameof(Email)); }
+        }
+
+        public TripType TripType
+        {
+            get => _tripType;
+            set { _tripType = value; OnPropertyChanged(nameof(TripType)); }
+        }
+
+        public ObservableCollection<Location> LocationHistory { get; set; } = new ObservableCollection<Location>();
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        protected void OnPropertyChanged(string? prop) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(prop ?? string.Empty));
+    }
+}
+
+
+
+----------------------------------------------------------------
+
+
+
+ПАПКА Service
+========================
+
+
+
+ApiResponse.cs
+===
+
+
+
+
+using System.Text.Json.Serialization;
+
+namespace TrackingApp.Services
+{
+    public class ApiResponse<T>
+    {
+        [JsonPropertyName("success")]
+        public bool Success { get; set; }
+
+        [JsonPropertyName("message")]
+        public string Message { get; set; } = string.Empty;
+
+        [JsonPropertyName("data")]
+        public T Data { get; set; }
+
+        [JsonPropertyName("errorCode")]
+        public string ErrorCode { get; set; } = string.Empty;
+
+        public ApiResponse() { }
+
+        public ApiResponse(bool success, string message, T data, string errorCode = "")
+        {
+            Success = success;
+            Message = message;
+            Data = data;
+            ErrorCode = errorCode;
+        }
+
+        public static ApiResponse<T> SuccessResponse(T data, string message = "")
+            => new ApiResponse<T>(true, message, data);
+
+        public static ApiResponse<T> ErrorResponse(string message, string errorCode = "")
+            => new ApiResponse<T>(false, message, default(T), errorCode);
+    }
+
+    public class ApiResponse
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public string ErrorCode { get; set; } = string.Empty;
+
+        public static ApiResponse SuccessResponse(string message = "")
+            => new ApiResponse { Success = true, Message = message };
+
+        public static ApiResponse ErrorResponse(string message, string errorCode = "")
+            => new ApiResponse { Success = false, Message = message, ErrorCode = errorCode };
+    }
+}
+
+
+
+---------------------------------------------------------------
+
+
+ITrackingService.cs
+====
+
+
+
+// Services/ITrackingService.cs
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using TrackingApp.Models;
+
+namespace TrackingApp.Services
+{
+    public interface ITrackingService
+    {
+        // Користувачі
+        Task<List<User>> GetUsersAsync();
+        Task<User> GetUserAsync(string userId);
+        Task<bool> UpdateUserLocationAsync(string userId, Location location);
+        Task<bool> UpdateUserStatusAsync(string userId, UserStatus status);
+
+        // Подорожі
+        Task<Trip> GetCurrentTripAsync();
+        Task<bool> UpdateTripAsync(Trip trip);
+        Task<bool> SetRouteAsync(List<Location> route);
+
+        // Сповіщення
+        Task<List<Notification>> GetNotificationsAsync();
+        Task<bool> SendNotificationAsync(string message);
+        Task<bool> SendFeedbackAsync(string feedback, int rating, User currentUser);
+
+        // Авторизація
+        Task<User> AuthenticateAsync(string username, string password);
+        Task<bool> RegisterUserAsync(User user, string password);
+
+        // Новий метод для перевірки з'єднання
+        Task<bool> CheckServerConnectionAsync();
+    }
+}
+
+
+
+
+
+
+
+--------------------------------------------------------
+
+
+LocalDataService.cs
+===
+
+
+
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Text.Json;
+using System.Linq;
+using TrackingApp.Models;
+using TrackingApp.Config;
+
+namespace TrackingApp.Services
+{
+    public class LocalDataService
+    {
+        private List<User> _users;
+        private Trip _currentTrip;
+        private List<Notification> _notifications;
+
+        public LocalDataService()
+        {
+            LoadOrCreateDefaultData();
+        }
+
+        private void LoadOrCreateDefaultData()
+        {
+            if (File.Exists(AppConfig.LocalDataFile))
+            {
+                LoadFromFile();
+            }
+            else
+            {
+                CreateDefaultData();
+                SaveToFile();
+            }
+        }
+
+        private void CreateDefaultData()
+        {
+            _users = new List<User>
+            {
+                new User
+                {
+                    Id = "1",
+                    Name = "1111",
+                    Email = "1111@example.com",
+                    Password = "1111",
+                    IsLeader = false,
+                    TripType = TripType.Walking
+                },
+                new User
+                {
+                    Id = "2",
+                    Name = "nazar_s",
+                    Email = "nazar_s@example.com",
+                    Password = "1111",
+                    IsLeader = false,
+                    TripType = TripType.Cycling
+                },
+                new User
+                {
+                    Id = "3",
+                    Name = "admin1",
+                    Email = "admin1@admin.com",
+                    Password = "admin1",
+                    IsLeader = true,
+                    TripType = TripType.Excursion
+                }
+            };
+
+            _currentTrip = new Trip
+            {
+                TripName = "Львів - Демонстраційний маршрут",
+                Duration = "3 години",
+                BreakSchedule = "Перерва з 12:00 до 13:00",
+                RestPlaces = new ObservableCollection<string> { "Парк Шевченка", "Кафе Центральне" },
+                PointsOfInterest = new ObservableCollection<string> { "Львівський оперний театр", "Ринок" },
+                Route = new ObservableCollection<Location>
+                {
+                    new Location(49.842957, 24.031111),
+                    new Location(49.844000, 24.032500),
+                    new Location(49.845500, 24.034000)
+                }
+            };
+
+            _notifications = new List<Notification>
+            {
+                new Notification { Message = "Система запущена", Time = DateTime.Now.AddMinutes(-5) },
+                new Notification { Message = "Маршрут завантажено", Time = DateTime.Now.AddMinutes(-2) },
+                new Notification { Message = "Всі користувачі підключені", Time = DateTime.Now.AddMinutes(-1) }
+            };
+        }
+
+        // Методи для отримання даних
+        public List<User> GetUsers()
+        {
+            // При отриманні користувачів скидаємо координати на початок маршруту
+            var users = _users.Select(u => new User
+            {
+                Id = u.Id,
+                Name = u.Name,
+                Email = u.Email,
+                Password = u.Password,
+                IsLeader = u.IsLeader,
+                TripType = u.TripType,
+                CurrentLocation = GetRouteStartLocation(),
+                LocationHistory = new ObservableCollection<Location>()
+            }).ToList();
+
+            return users;
+        }
+
+        public Trip GetCurrentTrip() => _currentTrip;
+        public List<Notification> GetNotifications() => _notifications;
+
+        // Методи для оновлення даних
+        public void SaveUser(User user)
+        {
+            var existing = _users.FirstOrDefault(u => u.Id == user.Id);
+            if (existing != null)
+            {
+                _users.Remove(existing);
+            }
+
+            // Зберігаємо тільки основні дані без координат
+            var userToSave = new User
+            {
+                Id = user.Id,
+                Name = user.Name,
+                Email = user.Email,
+                Password = user.Password,
+                IsLeader = user.IsLeader,
+                TripType = user.TripType
+                // Не зберігаємо CurrentLocation та LocationHistory
+            };
+
+            _users.Add(userToSave);
+            SaveToFile();
+        }
+
+        public void UpdateTrip(Trip trip)
+        {
+            _currentTrip = trip;
+            SaveToFile();
+        }
+
+        public void AddNotification(Notification notification)
+        {
+            _notifications.Insert(0, notification);
+            SaveToFile();
+        }
+
+        public void AddLocationToRoute(Location location)
+        {
+            _currentTrip.Route.Add(location);
+            SaveToFile();
+        }
+
+        public void ClearRoute()
+        {
+            _currentTrip.Route.Clear();
+            SaveToFile();
+        }
+
+        // Пошук користувача за іменем та паролем
+        public User FindUser(string username, string password)
+        {
+            var user = _users.FirstOrDefault(u => u.Name == username && u.Password == password);
+            if (user != null)
+            {
+                // Повертаємо користувача з координатами на початку маршруту
+                return new User
+                {
+                    Id = user.Id,
+                    Name = user.Name,
+                    Email = user.Email,
+                    Password = user.Password,
+                    IsLeader = user.IsLeader,
+                    TripType = user.TripType,
+                    CurrentLocation = GetRouteStartLocation(),
+                    LocationHistory = new ObservableCollection<Location>()
+                };
+            }
+            return null;
+        }
+
+        // Перевірка чи існує користувач
+        public bool UserExists(string username)
+        {
+            return _users.Any(u => u.Name == username);
+        }
+
+        private Location GetRouteStartLocation()
+        {
+            return _currentTrip.Route.Any()
+                ? new Location(_currentTrip.Route.First().Latitude, _currentTrip.Route.First().Longitude)
+                : new Location(49.842957, 24.031111); // Дефолтні координати Львова
+        }
+
+        private void LoadFromFile()
+        {
+            try
+            {
+                var json = File.ReadAllText(AppConfig.LocalDataFile);
+                var data = JsonSerializer.Deserialize<LocalData>(json);
+
+                _users = data?.Users ?? new List<User>();
+                _currentTrip = data?.CurrentTrip ?? new Trip();
+                _notifications = data?.Notifications ?? new List<Notification>();
+            }
+            catch (Exception ex)
+            {
+                // Якщо файл пошкоджений, створюємо дані за замовчуванням
+                System.Diagnostics.Debug.WriteLine($"Помилка завантаження даних: {ex.Message}");
+                CreateDefaultData();
+            }
+        }
+
+        private void SaveToFile()
+        {
+            try
+            {
+                var data = new LocalData
+                {
+                    Users = _users,
+                    CurrentTrip = _currentTrip,
+                    Notifications = _notifications
+                };
+
+                var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(AppConfig.LocalDataFile, json);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Помилка збереження даних: {ex.Message}");
+            }
+        }
+
+        // Модель для зберігання даних
+        private class LocalData
+        {
+            public List<User> Users { get; set; } = new List<User>();
+            public Trip CurrentTrip { get; set; } = new Trip();
+            public List<Notification> Notifications { get; set; } = new List<Notification>();
+        }
+    }
+}
+
+
+
+
+
+
+-----------------------------------------------------------------
+
+
+TrackingService.cs
+====
+
+
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using TrackingApp.Config;
+using TrackingApp.Infrastructure;
+using TrackingApp.Models;
+
+namespace TrackingApp.Services
+{
+    public class TrackingService : ITrackingService
+    {
+        private readonly IHttpClient _httpClient;
+
+        public TrackingService()
+        {
+            _httpClient = HttpClientFactory.CreateClient();
+            AppConfig.LogConfiguration();
+        }
+
+        // ДОДАНО: Метод для оновлення плану подорожі
+        public async Task<bool> UpdateTripPlanAsync(string tripId, string duration, string breakSchedule,
+                                                   List<string> restPlaces, List<string> pointsOfInterest,
+                                                   string updatedBy)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"📝 Оновлення плану подорожі для маршруту: {tripId}");
+
+                var result = await _httpClient.PostAsync<object>("/api/trip/plan/update", new
+                {
+                    TripId = tripId,
+                    Duration = duration,
+                    BreakSchedule = breakSchedule,
+                    RestPlaces = restPlaces,
+                    PointsOfInterest = pointsOfInterest,
+                    UpdatedBy = updatedBy
+                });
+
+                System.Diagnostics.Debug.WriteLine($"✅ План подорожі оновлено для маршруту: {tripId}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка оновлення плану подорожі: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<List<PredefinedTrip>> GetPredefinedTripsAsync()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("🗺️ Запит попередніх маршрутів через TCP...");
+                var trips = await _httpClient.GetAsync<List<PredefinedTrip>>("/api/trips/predefined");
+
+                System.Diagnostics.Debug.WriteLine($"✅ Отримано {trips?.Count ?? 0} маршрутів");
+                return trips ?? new List<PredefinedTrip>();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка отримання маршрутів: {ex.Message}");
+                return new List<PredefinedTrip>();
+            }
+        }
+
+        public async Task<bool> SetActiveTripAsync(string tripId)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"🎯 Встановлення активного маршруту: {tripId}");
+
+                var result = await _httpClient.PostAsync<object>("/api/trips/set_active", new
+                {
+                    TripId = tripId
+                });
+
+                System.Diagnostics.Debug.WriteLine($"✅ Активний маршрут встановлено: {tripId}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка встановлення маршруту: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> SavePredefinedTripAsync(PredefinedTrip trip)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"💾 Збереження маршруту: {trip.Name}");
+
+                var result = await _httpClient.PostAsync<object>("/api/trips/save_predefined", trip);
+
+                System.Diagnostics.Debug.WriteLine($"✅ Маршрут збережено: {trip.Name}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка збереження маршруту: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<Trip> GetActiveTripAsync()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("🗺️ Запит активного маршруту через TCP...");
+                var trip = await _httpClient.GetAsync<Trip>("/api/trip/active");
+
+                if (trip != null && !string.IsNullOrEmpty(trip.TripName) && trip.Route != null && trip.Route.Count > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"✅ Отримано активний маршрут: {trip.TripName}");
+                    System.Diagnostics.Debug.WriteLine($"📍 Кількість точок: {trip.Route.Count}");
+                    return trip;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("ℹ️ Активний маршрут не знайдено або невалідний");
+                    return new Trip();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка отримання активного маршруту: {ex.Message}");
+                return new Trip();
+            }
+        }
+
+        public async Task<Trip> GetCurrentTripAsync()
+        {
+            return await GetActiveTripAsync();
+        }
+
+        public async Task<bool> CheckServerConnectionAsync()
+        {
+            try
+            {
+                if (!AppConfig.UseServerMode)
+                {
+                    System.Diagnostics.Debug.WriteLine("🔧 Локальний режим - TCP сервер не використовується");
+                    return true;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"🔍 Перевірка TCP підключення до: {AppConfig.ServerHost}:{AppConfig.ServerPort}");
+
+                using var client = new TcpClient();
+
+                var connectTask = client.ConnectAsync(AppConfig.ServerHost, AppConfig.ServerPort);
+                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5));
+
+                var completedTask = await Task.WhenAny(connectTask, timeoutTask);
+
+                if (completedTask == timeoutTask)
+                {
+                    System.Diagnostics.Debug.WriteLine("❌ ТАЙМАУТ ПІДКЛЮЧЕННЯ: Сервер не відповідає протягом 5 секунд");
+                    return false;
+                }
+
+                if (client.Connected)
+                {
+                    System.Diagnostics.Debug.WriteLine("✅ TCP сервер доступний! Тестування команди ping...");
+
+                    try
+                    {
+                        var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+                        var request = new { Command = "ping", Data = new { } };
+                        var jsonRequest = JsonSerializer.Serialize(request, jsonOptions);
+
+                        using var stream = client.GetStream();
+                        using var writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
+                        using var reader = new StreamReader(stream, Encoding.UTF8);
+
+                        await writer.WriteLineAsync(jsonRequest);
+                        var responseJson = await reader.ReadLineAsync();
+
+                        System.Diagnostics.Debug.WriteLine($"✅ TCP ping успішний: {responseJson}");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"❌ TCP ping не вдавшийся: {ex.Message}");
+                        return false;
+                    }
+                }
+
+                return false;
+            }
+            catch (SocketException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка TCP сокета: {ex.Message}");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Несподівана помилка TCP: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<List<User>> GetUsersAsync()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("📥 Запит користувачів через TCP...");
+                return await _httpClient.GetAsync<List<User>>("/api/users");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка отримання користувачів: {ex.Message}");
+                return new List<User>();
+            }
+        }
+
+        public async Task<User> GetUserAsync(string userId)
+        {
+            try
+            {
+                var users = await GetUsersAsync();
+                return users?.Find(u => u.Id == userId);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка отримання користувача {userId}: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<bool> UpdateUserLocationAsync(string userId, Location location)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"📍 Оновлення локації для {userId} через TCP");
+                var result = await _httpClient.PutAsync<object>($"/api/users/{userId}/location", new
+                {
+                    UserId = userId,
+                    Location = location
+                });
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка оновлення локації: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> UpdateUserStatusAsync(string userId, UserStatus status)
+        {
+            try
+            {
+                var message = status == UserStatus.Help ? "Потрібна допомога" : "Потрібна зупинка";
+                System.Diagnostics.Debug.WriteLine($"🔄 Оновлення статусу для {userId}: {message}");
+
+                await SendNotificationAsync($"{userId}: {message}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка оновлення статусу: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> UpdateTripAsync(Trip trip)
+        {
+            System.Diagnostics.Debug.WriteLine("⚠️ Оновлення маршруту не підтримується - використовуйте predefined trips");
+            return false;
+        }
+
+        public async Task<bool> SetRouteAsync(List<Location> route)
+        {
+            try
+            {
+                var trip = await GetCurrentTripAsync();
+                if (trip != null)
+                {
+                    trip.Route = new System.Collections.ObjectModel.ObservableCollection<Location>(route);
+                    return await UpdateTripAsync(trip);
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка встановлення маршруту: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<List<Notification>> GetNotificationsAsync()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("📢 Запит сповіщень через TCP...");
+                return await _httpClient.GetAsync<List<Notification>>("/api/notifications");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка отримання сповіщень: {ex.Message}");
+                return new List<Notification>();
+            }
+        }
+
+        public async Task<bool> SendNotificationAsync(string message)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"📢 Відправка сповіщення через TCP: {message}");
+                var result = await _httpClient.PostAsync<object>("/api/notifications", new
+                {
+                    Message = message,
+                    UserId = "",
+                    UserName = "System"
+                });
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка відправки сповіщення: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> SendFeedbackAsync(string feedback, int rating, User currentUser)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"💬 Відправка відгуку через TCP: {feedback} (Рейтинг: {rating}/5)");
+
+                if (currentUser == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("❌ Помилка: поточний користувач не визначений");
+                    return false;
+                }
+
+                var currentTrip = await GetCurrentTripAsync();
+
+                System.Diagnostics.Debug.WriteLine($"   Користувач: {currentUser.Name}");
+                System.Diagnostics.Debug.WriteLine($"   Поточна подорож: {currentTrip?.TripName ?? "Не визначено"}");
+
+                var result = await _httpClient.PostAsync<object>("/api/feedback", new
+                {
+                    UserId = currentUser.Id,
+                    UserName = currentUser.Name,
+                    Message = feedback,
+                    Rating = rating,
+                    TripName = currentTrip?.TripName ?? "Невідома подорож"
+                });
+
+                System.Diagnostics.Debug.WriteLine($"✅ Відгук успішно відправлено на сервер від {currentUser.Name}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка відправки відгуку: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"   StackTrace: {ex.StackTrace}");
+                return false;
+            }
+        }
+
+        public async Task<User> AuthenticateAsync(string username, string password)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"🔐 Авторизація користувача через TCP: {username}");
+                var users = await GetUsersAsync();
+                return users?.Find(u => u.Name == username && u.Password == password);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка авторизації: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<bool> RegisterUserAsync(User user, string password)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"📝 Реєстрація користувача через TCP: {user.Name}");
+
+                var result = await _httpClient.PostAsync<object>("/api/auth/register", new
+                {
+                    Name = user.Name,
+                    Email = user.Email,
+                    Password = password,
+                    IsLeader = user.IsLeader,
+                    TripType = user.TripType
+                });
+
+                System.Diagnostics.Debug.WriteLine($"✅ Користувача {user.Name} успішно зареєстровано в базі даних");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка реєстрації: {ex.Message}");
+                return false;
+            }
+        }
+    }
+}
+
+
+
+
+
+
+
+-----------------------------------------------------------------------
+
+
+ПАПКА Themes
+===============================
+
+
+Styles.xaml
+===
+
+
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:converters="clr-namespace:TrackingApp.Converters">
+    <converters:BoolToBrushConverter x:Key="BoolToBrushConverter"/>
+    <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+
+    <SolidColorBrush x:Key="PrimaryColor" Color="#FF2D8CFF"/>
+    <SolidColorBrush x:Key="SecondaryColor" Color="#FFECECEC"/>
+
+    <Style x:Key="HeaderText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Margin" Value="0,8,0,8"/>
+    </Style>
+
+    <Style x:Key="PrimaryButton" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource PrimaryColor}"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Padding" Value="6,4"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Margin" Value="4"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+
+    <Style x:Key="SecondaryButton" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource SecondaryColor}"/>
+        <Setter Property="Foreground" Value="Black"/>
+        <Setter Property="Padding" Value="6,4"/>
+        <Setter Property="BorderBrush" Value="Gray"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Margin" Value="4"/>
+    </Style>
+</ResourceDictionary>
+
+
+-------------------------------------------------------
+
+
+
+ПАПКА ViewModels
+================================
+
+
+MainViewModel.cs
+====
+
+
+
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
+using System.Timers;
+using System.Windows;
+using System.Threading.Tasks;
+using TrackingApp.Models;
+using TrackingApp.Services;
+
+namespace TrackingApp.ViewModels
+{
+    public class MainViewModel : INotifyPropertyChanged
+    {
+        private readonly System.Timers.Timer _gpsTimer;
+        private readonly System.Timers.Timer _statusReminderTimer;
+        private readonly System.Timers.Timer _dataRefreshTimer;
+        private readonly Random _rnd = new Random();
+        private readonly LocalDataService _localDataService;
+        private readonly TrackingService _trackingService;
+        private const double WalkingSpeedMps = 1.4;
+        private const double CyclingSpeedMps = 5.5;
+        private const double ExcursionSpeedMps = 0.8;
+        private const double MaxDeviationKm = 0.1;
+        private const double GpsNoiseMeters = 5.0;
+        private const int StatusReminderIntervalMs = 180000;
+        private const int DataRefreshIntervalMs = 10000;
+        private const int MaxReminderCount = 3;
+
+        private Dictionary<string, int> _userReminderCounts = new Dictionary<string, int>();
+        private bool _isDataLoading = false;
+
+        public ObservableCollection<User> Users { get; set; } = new ObservableCollection<User>();
+        private ObservableCollection<Notification> _allNotifications = new ObservableCollection<Notification>();
+        public ObservableCollection<Notification> AllNotifications
+        {
+            get => _allNotifications;
+            set
+            {
+                _allNotifications = value;
+                OnPropertyChanged(nameof(AllNotifications));
+                OnPropertyChanged(nameof(UserNotifications));
+            }
+        }
+
+        private Trip _currentTrip = new Trip();
+        public Trip CurrentTrip
+        {
+            get => _currentTrip;
+            set
+            {
+                _currentTrip = value;
+                OnPropertyChanged(nameof(CurrentTrip));
+                OnPropertyChanged(nameof(CurrentTrip.TripName));
+            }
+        }
+
+        private User _selectedUser;
+        public User SelectedUser
+        {
+            get => _selectedUser;
+            set { _selectedUser = value; OnPropertyChanged(nameof(SelectedUser)); }
+        }
+
+        private User _currentUser;
+        public User CurrentUser
+        {
+            get => _currentUser;
+            set
+            {
+                _currentUser = value;
+
+                if (_currentUser != null && !_currentUser.IsLeader)
+                {
+                    ClearUserNotifications();
+                }
+
+                OnPropertyChanged(nameof(CurrentUser));
+                OnPropertyChanged(nameof(IsLeaderView));
+                OnPropertyChanged(nameof(IsParticipantView));
+                OnPropertyChanged(nameof(UserNotifications));
+            }
+        }
+
+        private bool _showNotifications = true;
+        public bool ShowNotifications
+        {
+            get => _showNotifications;
+            set
+            {
+                _showNotifications = value;
+                OnPropertyChanged(nameof(ShowNotifications));
+                OnPropertyChanged(nameof(UserNotifications));
+            }
+        }
+
+        public bool IsLeaderView => CurrentUser?.IsLeader ?? false;
+        public bool IsParticipantView => CurrentUser != null && !CurrentUser.IsLeader;
+
+        private ObservableCollection<PredefinedTrip> _predefinedTrips = new ObservableCollection<PredefinedTrip>();
+        public ObservableCollection<PredefinedTrip> PredefinedTrips
+        {
+            get => _predefinedTrips;
+            set { _predefinedTrips = value; OnPropertyChanged(nameof(PredefinedTrips)); }
+        }
+
+        private PredefinedTrip _selectedPredefinedTrip;
+        public PredefinedTrip SelectedPredefinedTrip
+        {
+            get => _selectedPredefinedTrip;
+            set
+            {
+                _selectedPredefinedTrip = value;
+                OnPropertyChanged(nameof(SelectedPredefinedTrip));
+            }
+        }
+
+        public ObservableCollection<Notification> UserNotifications
+        {
+            get
+            {
+                if (CurrentUser == null) return new ObservableCollection<Notification>();
+                if (!_showNotifications) return new ObservableCollection<Notification>();
+
+                if (CurrentUser.IsLeader)
+                {
+                    return AllNotifications;
+                }
+                else
+                {
+                    return new ObservableCollection<Notification>(
+                        AllNotifications.Where(n =>
+                            n.Message.Contains(CurrentUser.Name) ||
+                            n.Message.StartsWith("Ви ") ||
+                            n.Message.StartsWith("Ваш ") ||
+                            n.Message.Contains($" {CurrentUser.Name} ") ||
+                            n.Message.EndsWith($" {CurrentUser.Name}") ||
+                            (n.UserId == CurrentUser.Id && !string.IsNullOrEmpty(n.UserId))
+                        ).ToList());
+                }
+            }
+        }
+
+        public event Action MapUpdateRequested;
+
+        public MainViewModel()
+        {
+            _localDataService = new LocalDataService();
+            _trackingService = new TrackingService();
+
+            LoadData();
+
+            _ = LoadPredefinedTripsAsync();
+
+            _gpsTimer = new System.Timers.Timer(1000);
+            _gpsTimer.Elapsed += GpsTimer_Elapsed;
+            _gpsTimer.Start();
+
+            _statusReminderTimer = new System.Timers.Timer(StatusReminderIntervalMs);
+            _statusReminderTimer.Elapsed += StatusReminderTimer_Elapsed;
+            _statusReminderTimer.Start();
+
+            _dataRefreshTimer = new System.Timers.Timer(DataRefreshIntervalMs);
+            _dataRefreshTimer.Elapsed += DataRefreshTimer_Elapsed;
+            _dataRefreshTimer.Start();
+        }
+
+        public TrackingService TrackingService => _trackingService;
+
+        public async Task<bool> SaveCurrentTripToServer()
+        {
+            try
+            {
+                if (CurrentTrip == null) return false;
+
+                await LoadTripDataImmediately();
+
+                System.Diagnostics.Debug.WriteLine("✅ Дані маршруту оновлено на сервері");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка збереження маршруту: {ex.Message}");
+                AddNotification($"❌ Помилка збереження маршруту: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> SendFeedbackAsync(string feedback, int rating)
+        {
+            try
+            {
+                if (CurrentUser == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("❌ Поточний користувач не визначений");
+                    return false;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"💬 Відправка відгуку через TrackingService...");
+                System.Diagnostics.Debug.WriteLine($"   Користувач: {CurrentUser.Name}");
+                System.Diagnostics.Debug.WriteLine($"   Відгук: {feedback}");
+                System.Diagnostics.Debug.WriteLine($"   Рейтинг: {rating}");
+
+                // Викликаємо сервіс відправки
+                var success = await _trackingService.SendFeedbackAsync(feedback, rating, CurrentUser);
+
+                if (success)
+                {
+                    System.Diagnostics.Debug.WriteLine("✅ Відгук успішно відправлено на сервер");
+
+                    // Тихий успіх - без сповіщень для звичайних користувачів
+                    // Тільки адміністратор бачить сповіщення про новий відгук
+                    if (IsLeaderView)
+                    {
+                        AddNotification($"⭐ Отримано новий відгук від {CurrentUser.Name} ({rating}/5)");
+                    }
+
+                    return true; // ✅ Успішне виконання
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("❌ TrackingService повернув false");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка в SendFeedbackAsync: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"   StackTrace: {ex.StackTrace}");
+                return false;
+            }
+        }
+
+        public async Task SetActiveTripAsync()
+        {
+            if (SelectedPredefinedTrip == null)
+            {
+                System.Diagnostics.Debug.WriteLine("❌ Маршрут не вибрано");
+                AddNotification("❌ Будь ласка, виберіть маршрут");
+                return;
+            }
+
+            try
+            {
+                var tripId = SelectedPredefinedTrip.Id;
+                System.Diagnostics.Debug.WriteLine($"🎯 Встановлення активного маршруту: {SelectedPredefinedTrip.Name}");
+
+                var success = await _trackingService.SetActiveTripAsync(tripId);
+                if (success)
+                {
+                    await LoadTripDataImmediately();
+                    AddNotification($"✅ Активний маршрут оновлено: {SelectedPredefinedTrip.Name}");
+
+                    Application.Current?.Dispatcher?.Invoke(() =>
+                    {
+                        foreach (var trip in PredefinedTrips)
+                        {
+                            trip.IsActive = (trip.Id == tripId);
+                        }
+                        OnPropertyChanged(nameof(PredefinedTrips));
+                    });
+                }
+                else
+                {
+                    AddNotification("❌ Не вдалося встановити маршрут");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка встановлення маршруту: {ex.Message}");
+                AddNotification($"❌ Помилка: {ex.Message}");
+            }
+        }
+
+        public async Task<bool> UpdateTripPlanAsync(string duration, string breakSchedule,
+                                                   ObservableCollection<string> restPlaces,
+                                                   ObservableCollection<string> pointsOfInterest)
+        {
+            try
+            {
+                if (SelectedPredefinedTrip == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("❌ Маршрут не вибрано для оновлення плану");
+                    AddNotification("❌ Будь ласка, виберіть маршрут для оновлення плану");
+                    return false;
+                }
+
+                var tripId = SelectedPredefinedTrip.Id;
+                var updatedBy = CurrentUser?.Name ?? "Адміністратор";
+
+                System.Diagnostics.Debug.WriteLine($"📝 Оновлення плану подорожі для маршруту: {SelectedPredefinedTrip.Name}");
+
+                var success = await _trackingService.UpdateTripPlanAsync(
+                    tripId,
+                    duration,
+                    breakSchedule,
+                    restPlaces?.ToList() ?? new List<string>(),
+                    pointsOfInterest?.ToList() ?? new List<string>(),
+                    updatedBy
+                );
+
+                if (success)
+                {
+                    // Оновлюємо локальні дані
+                    CurrentTrip.Duration = duration;
+                    CurrentTrip.BreakSchedule = breakSchedule;
+                    CurrentTrip.RestPlaces = restPlaces;
+                    CurrentTrip.PointsOfInterest = pointsOfInterest;
+
+                    AddNotification($"✅ План подорожі оновлено для маршруту: {SelectedPredefinedTrip.Name}");
+                    OnPropertyChanged(nameof(CurrentTrip));
+
+                    return true;
+                }
+                else
+                {
+                    AddNotification("❌ Не вдалося оновити план подорожі на сервері");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка оновлення плану подорожі: {ex.Message}");
+                AddNotification($"❌ Помилка оновлення плану подорожі: {ex.Message}");
+                return false;
+            }
+        }
+
+        private async void DataRefreshTimer_Elapsed(object sender, ElapsedEventArgs e)
+        {
+            if (_isDataLoading) return;
+
+            try
+            {
+                _isDataLoading = true;
+                await LoadDataFromService();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка оновлення даних: {ex.Message}");
+            }
+            finally
+            {
+                _isDataLoading = false;
+            }
+        }
+
+        public async Task LoadPredefinedTripsAsync()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("🔄 Завантаження попередніх маршрутів...");
+
+                var trips = await _trackingService.GetPredefinedTripsAsync();
+
+                Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    PredefinedTrips.Clear();
+                    foreach (var trip in trips)
+                    {
+                        PredefinedTrips.Add(trip);
+                    }
+
+                    var activeTrip = trips.FirstOrDefault(t => t.IsActive);
+                    if (activeTrip != null)
+                    {
+                        SelectedPredefinedTrip = activeTrip;
+                        System.Diagnostics.Debug.WriteLine($"📍 Поточний активний маршрут: {activeTrip.Name}");
+                    }
+                    else if (trips.Any())
+                    {
+                        SelectedPredefinedTrip = trips.First();
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"✅ Завантажено {trips.Count} маршрутів");
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка завантаження маршрутів: {ex.Message}");
+            }
+        }
+
+        private async Task LoadTripDataImmediately()
+        {
+            try
+            {
+                var trip = await _trackingService.GetActiveTripAsync();
+
+                Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    if (trip != null && !string.IsNullOrEmpty(trip.TripName) && trip.IsActive)
+                    {
+                        UpdateTripData(trip);
+                        System.Diagnostics.Debug.WriteLine($"✅ Оновлено дані маршруту: {trip.TripName}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка оновлення маршруту: {ex.Message}");
+            }
+        }
+
+        private async Task LoadDataFromService()
+        {
+            if (_isDataLoading) return;
+
+            try
+            {
+                _isDataLoading = true;
+                System.Diagnostics.Debug.WriteLine("🔄 LoadDataFromService - початок");
+
+                var users = await _trackingService.GetUsersAsync();
+                var trip = await _trackingService.GetActiveTripAsync();
+                var notifications = await _trackingService.GetNotificationsAsync();
+
+                System.Diagnostics.Debug.WriteLine($"📍 Отримано користувачів: {users.Count}");
+                System.Diagnostics.Debug.WriteLine($"📍 Отримано маршрут: {trip?.TripName ?? "null"}");
+                System.Diagnostics.Debug.WriteLine($"📍 Отримано сповіщень: {notifications.Count}");
+
+                Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    Users.Clear();
+                    foreach (var user in users)
+                    {
+                        Users.Add(user);
+                    }
+
+                    if (trip != null && !string.IsNullOrEmpty(trip.TripName) && trip.IsActive)
+                    {
+                        UpdateTripData(trip);
+                        System.Diagnostics.Debug.WriteLine($"✅ Оновлено дані маршруту: {trip.TripName}");
+                    }
+                    else
+                    {
+                        CurrentTrip.TripName = "Оберіть маршрут";
+                        CurrentTrip.Duration = "Не вказано";
+                        CurrentTrip.BreakSchedule = "Не вказано";
+                        CurrentTrip.RestPlaces = new ObservableCollection<string>();
+                        CurrentTrip.PointsOfInterest = new ObservableCollection<string>();
+                        CurrentTrip.Route = new ObservableCollection<Location>();
+                        CurrentTrip.IsActive = false;
+
+                        System.Diagnostics.Debug.WriteLine("ℹ️ Активний маршрут не знайдено");
+                    }
+
+                    AllNotifications.Clear();
+                    foreach (var notification in notifications)
+                    {
+                        AllNotifications.Add(notification);
+                    }
+
+                    OnPropertyChanged(nameof(CurrentTrip));
+                    MapUpdateRequested?.Invoke();
+
+                    System.Diagnostics.Debug.WriteLine("🔄 LoadDataFromService - кінець");
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ ПОМИЛКА в LoadDataFromService: {ex.Message}");
+                Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    AddNotification($"⚠️ Помилка завантаження даних: {ex.Message}");
+                });
+            }
+            finally
+            {
+                _isDataLoading = false;
+            }
+        }
+
+        private void UpdateTripData(Trip newTrip)
+        {
+            System.Diagnostics.Debug.WriteLine($"🔄 Оновлення даних подорожі: {newTrip.TripName}");
+
+            CurrentTrip.TripName = newTrip.TripName;
+            CurrentTrip.Duration = newTrip.Duration;
+            CurrentTrip.BreakSchedule = newTrip.BreakSchedule;
+            CurrentTrip.IsActive = newTrip.IsActive;
+
+            CurrentTrip.RestPlaces.Clear();
+            foreach (var place in newTrip.RestPlaces)
+                CurrentTrip.RestPlaces.Add(place);
+
+            CurrentTrip.PointsOfInterest.Clear();
+            foreach (var point in newTrip.PointsOfInterest)
+                CurrentTrip.PointsOfInterest.Add(point);
+
+            CurrentTrip.Route.Clear();
+            foreach (var location in newTrip.Route)
+                CurrentTrip.Route.Add(location);
+
+            OnPropertyChanged(nameof(CurrentTrip));
+            OnPropertyChanged(nameof(CurrentTrip.TripName));
+            OnPropertyChanged(nameof(CurrentTrip.Route));
+            OnPropertyChanged(nameof(CurrentTrip.RestPlaces));
+            OnPropertyChanged(nameof(CurrentTrip.PointsOfInterest));
+        }
+
+        private void ClearUserNotifications()
+        {
+            try
+            {
+                if (CurrentUser == null) return;
+
+                var notificationsToRemove = AllNotifications
+                    .Where(n => n.Message.StartsWith(CurrentUser.Name) ||
+                               n.Message.StartsWith("Ви") ||
+                               n.Message.Contains(CurrentUser.Name))
+                    .ToList();
+
+                foreach (var notification in notificationsToRemove)
+                {
+                    AllNotifications.Remove(notification);
+                }
+
+                try
+                {
+                    var method = _localDataService.GetType().GetMethod("ClearUserNotifications");
+                    if (method != null)
+                    {
+                        method.Invoke(_localDataService, new object[] { CurrentUser.Name });
+                    }
+                }
+                catch
+                {
+                }
+
+                OnPropertyChanged(nameof(AllNotifications));
+                OnPropertyChanged(nameof(UserNotifications));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Помилка очищення сповіщень користувача: {ex.Message}");
+            }
+        }
+
+        private void StatusReminderTimer_Elapsed(object sender, ElapsedEventArgs e)
+        {
+            try
+            {
+                Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    foreach (var user in Users.Where(u => u.Status != UserStatus.None))
+                    {
+                        if (!_userReminderCounts.ContainsKey(user.Id))
+                        {
+                            _userReminderCounts[user.Id] = 0;
+                        }
+
+                        if (_userReminderCounts[user.Id] < MaxReminderCount)
+                        {
+                            _userReminderCounts[user.Id]++;
+
+                            string statusText = user.Status == UserStatus.Help ? "ДОПОМОГУ" : "ЗУПИНКУ";
+                            string reminderText = user.Status == UserStatus.Help ? "потрібна допомога" : "потрібна зупинка";
+
+                            string message = $"{user.Name} ще {reminderText} (нагадування {_userReminderCounts[user.Id]}/{MaxReminderCount})";
+
+                            AddNotification(message);
+
+                            if (_userReminderCounts[user.Id] >= MaxReminderCount)
+                            {
+                                user.Status = UserStatus.None;
+                                AddNotification($"Статус {statusText} для {user.Name} автоматично скинуто після {MaxReminderCount} нагадувань");
+
+                                try
+                                {
+                                    _localDataService.SaveUser(user);
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"Помилка збереження користувача: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Помилка таймера нагадувань: {ex.Message}");
+            }
+        }
+
+        public void AddNotification(string message)
+        {
+            Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                var notification = new Notification
+                {
+                    Message = message,
+                    Time = DateTime.Now,
+                    UserId = CurrentUser?.Id ?? "",
+                    UserName = CurrentUser?.Name ?? "Система"
+                };
+                AllNotifications.Insert(0, notification);
+
+                try
+                {
+                    _localDataService.AddNotification(notification);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Помилка збереження сповіщення: {ex.Message}");
+                }
+
+                OnPropertyChanged(nameof(AllNotifications));
+                OnPropertyChanged(nameof(UserNotifications));
+            });
+        }
+
+        private void AddPersonalNotification(string message)
+        {
+            Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                var notification = new Notification
+                {
+                    Message = message,
+                    Time = DateTime.Now,
+                    UserId = CurrentUser?.Id ?? "",
+                    UserName = CurrentUser?.Name ?? "Користувач"
+                };
+                AllNotifications.Insert(0, notification);
+
+                try
+                {
+                    _localDataService.AddNotification(notification);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Помилка збереження сповіщення: {ex.Message}");
+                }
+
+                OnPropertyChanged(nameof(AllNotifications));
+                OnPropertyChanged(nameof(UserNotifications));
+            });
+        }
+
+        public void SendHelpRequest()
+        {
+            if (CurrentUser == null) return;
+
+            _userReminderCounts[CurrentUser.Id] = 0;
+            CurrentUser.Status = UserStatus.Help;
+
+            AddNotification($"{CurrentUser.Name} надіслав запит на ДОПОМОГУ! Нагадування буде через 3 хвилини.");
+
+            if (!CurrentUser.IsLeader)
+            {
+                AddPersonalNotification($"Ви надіслали запит на ДОПОМОГУ! Очікуйте на допомогу.");
+            }
+
+            MapUpdateRequested?.Invoke();
+
+            try
+            {
+                _localDataService.SaveUser(CurrentUser);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Помилка збереження користувача: {ex.Message}");
+            }
+        }
+
+        public void SendStopRequest()
+        {
+            if (CurrentUser == null) return;
+
+            _userReminderCounts[CurrentUser.Id] = 0;
+            CurrentUser.Status = UserStatus.Stop;
+
+            AddNotification($"{CurrentUser.Name} надіслав запит на ЗУПИНКУ! Нагадування буде через 3 хвилини.");
+
+            if (!CurrentUser.IsLeader)
+            {
+                AddPersonalNotification($"Ви надіслали запит на ЗУПИНКУ! Група зупиниться.");
+            }
+
+            MapUpdateRequested?.Invoke();
+
+            try
+            {
+                _localDataService.SaveUser(CurrentUser);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Помилка збереження користувача: {ex.Message}");
+            }
+        }
+
+        public void SendHelpStatus() => SendHelpRequest();
+        public void SendStopStatus() => SendStopRequest();
+
+        private void GpsTimer_Elapsed(object sender, ElapsedEventArgs e)
+        {
+            try
+            {
+                Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    foreach (var u in Users)
+                    {
+                        MoveRandomNearRoute(u);
+
+                        var dist = DistanceToRoute(u.CurrentLocation, CurrentTrip.Route);
+                        if (dist > 0.15 && _showNotifications)
+                        {
+                            AddNotification($"{u.Name} відхилився від маршруту ({dist:F2} km).");
+                        }
+                    }
+                    MapUpdateRequested?.Invoke();
+                });
+            }
+            catch (Exception ex)
+            {
+                if (_showNotifications)
+                    Application.Current?.Dispatcher?.Invoke(() =>
+                        AddNotification($"Помилка GPS-імітації: {ex.Message}"));
+            }
+        }
+
+        private void MoveRandomNearRoute(User user)
+        {
+            if (!CurrentTrip.Route.Any()) return;
+
+            var closestPoint = CurrentTrip.Route.OrderBy(p => HaversineDistanceKm(user.CurrentLocation, p)).First();
+
+            double deviationKm = _rnd.NextDouble() * MaxDeviationKm;
+            double angle = _rnd.NextDouble() * 2 * Math.PI;
+
+            double latOffset = (deviationKm / 111.0) * Math.Cos(angle);
+            double lonOffset = (deviationKm / (111.0 * Math.Cos(closestPoint.Latitude * Math.PI / 180.0))) * Math.Sin(angle);
+
+            double newLat = closestPoint.Latitude + latOffset;
+            double newLon = closestPoint.Longitude + lonOffset;
+
+            double noiseMeters = GaussianRandom(_rnd, 0, GpsNoiseMeters);
+            var (latNoise, lonNoise) = MetersToLatLonOffset(noiseMeters, noiseMeters, newLat);
+            newLat += latNoise;
+            newLon += lonNoise;
+
+            user.CurrentLocation = new Location(newLat, newLon);
+
+            try
+            {
+                _localDataService.SaveUser(user);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Помилка збереження локації користувача: {ex.Message}");
+            }
+        }
+
+        private double GaussianRandom(Random rand, double mean, double stdDev)
+        {
+            double u1 = 1.0 - rand.NextDouble();
+            double u2 = 1.0 - rand.NextDouble();
+            double randStdNormal = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2);
+            return mean + stdDev * randStdNormal;
+        }
+
+        private (double latOffset, double lonOffset) MetersToLatLonOffset(double metersLat, double metersLon, double latitude)
+        {
+            const double EarthRadius = 6371000;
+            double latOffset = (metersLat / EarthRadius) * (180.0 / Math.PI);
+            double lonOffset = (metersLon / (EarthRadius * Math.Cos(latitude * Math.PI / 180.0))) * (180.0 / Math.PI);
+            return (latOffset, lonOffset);
+        }
+
+        private double DistanceToRoute(Location loc, ObservableCollection<Location> route)
+        {
+            if (route == null || !route.Any()) return double.MaxValue;
+            return route.Min(r => HaversineDistanceKm(loc, r));
+        }
+
+        private double HaversineDistanceKm(Location a, Location b)
+        {
+            double R = 6371;
+            double dLat = ToRad(b.Latitude - a.Latitude);
+            double dLon = ToRad(b.Longitude - a.Longitude);
+            double lat1 = ToRad(a.Latitude);
+            double lat2 = ToRad(b.Latitude);
+            double sinDlat = Math.Sin(dLat / 2);
+            double sinDlon = Math.Sin(dLon / 2);
+            double aa = sinDlat * sinDlat + sinDlon * sinDlon * Math.Cos(lat1) * Math.Cos(lat2);
+            double c = 2 * Math.Atan2(Math.Sqrt(aa), Math.Sqrt(1 - aa));
+            return R * c;
+        }
+
+        private double ToRad(double deg) => deg * Math.PI / 180.0;
+
+        public void EndTrip()
+        {
+            _gpsTimer.Stop();
+            _statusReminderTimer.Stop();
+            _dataRefreshTimer.Stop();
+            AddNotification("Подорож завершено.");
+        }
+
+        public async void UpdateTripPlan(string duration, string breakSchedule, ObservableCollection<string> restPlaces, ObservableCollection<string> pointsOfInterest)
+        {
+            try
+            {
+                // Використовуємо новий метод для оновлення в базі даних
+                var success = await UpdateTripPlanAsync(duration, breakSchedule, restPlaces, pointsOfInterest);
+
+                if (success)
+                {
+                    // Локальне оновлення вже виконано в UpdateTripPlanAsync
+                    System.Diagnostics.Debug.WriteLine("✅ План подорожі оновлено та збережено в базі даних");
+                }
+                else
+                {
+                    AddNotification("⚠️ План подорожі оновлено локально, але не вдалося зберегти в базі даних");
+                }
+
+                OnPropertyChanged(nameof(CurrentTrip));
+            }
+            catch (Exception ex)
+            {
+                AddNotification($"❌ Помилка оновлення плану подорожі: {ex.Message}");
+            }
+        }
+
+        public void AddUser(User u)
+        {
+            try
+            {
+                Users.Add(u);
+                _localDataService.SaveUser(u);
+                AddNotification($"Користувач {u.Name} доданий");
+            }
+            catch (Exception ex)
+            {
+                AddNotification($"Помилка при додаванні користувача: {ex.Message}");
+            }
+        }
+
+        public void DeleteUser(string userName)
+        {
+            try
+            {
+                var userToDelete = Users.FirstOrDefault(u => u.Name == userName);
+                if (userToDelete != null)
+                {
+                    Users.Remove(userToDelete);
+                    LoadData();
+                    AddNotification($"Користувача {userName} видалено");
+                }
+            }
+            catch (Exception ex)
+            {
+                AddNotification($"Помилка видалення: {ex.Message}");
+            }
+        }
+
+        public void LoadData()
+        {
+            LoadDataFromService();
+        }
+
+        public void ClearRoute()
+        {
+            CurrentTrip.Route.Clear();
+
+            try
+            {
+                _localDataService.UpdateTrip(CurrentTrip);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Помилка очищення маршруту: {ex.Message}");
+            }
+
+            AddNotification("Маршрут очищено.");
+        }
+
+        public void SetManualRoute()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("🎯 SetManualRoute викликано");
+
+                ClearRoute();
+                CurrentTrip.TripName = "Ручний маршрут";
+                CurrentTrip.Duration = "Не вказано";
+                CurrentTrip.BreakSchedule = "Не вказано";
+                CurrentTrip.RestPlaces.Clear();
+                CurrentTrip.PointsOfInterest.Clear();
+                CurrentTrip.IsActive = true;
+
+                OnPropertyChanged(nameof(CurrentTrip));
+                OnPropertyChanged(nameof(CurrentTrip.TripName));
+
+                AddNotification("Обрано ручне прокладання маршруту");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"💥 Помилка в SetManualRoute: {ex.Message}");
+                AddNotification($"❌ Помилка встановлення ручного маршруту: {ex.Message}");
+            }
+        }
+
+        private void RelocateUsersToRouteStart()
+        {
+            if (!CurrentTrip.Route.Any()) return;
+            var startPoint = CurrentTrip.Route.First();
+            foreach (var user in Users)
+            {
+                user.CurrentLocation = new Location(startPoint.Latitude, startPoint.Longitude);
+
+                try
+                {
+                    _localDataService.SaveUser(user);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Помилка переміщення користувача: {ex.Message}");
+                }
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+}
+
+
+
+
+
+
+-------------------------------------------------------------------
+
+
+
+ПАПКА Views
+=================================
+
+
+
+FeedbackWindow.xaml
+====
+
+
+<Window x:Class="TrackingApp.Views.FeedbackWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Залишити відгук" Height="350" Width="400"
+        MinHeight="300" MinWidth="400"
+        WindowStartupLocation="CenterScreen"
+        Closing="Window_Closing">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <TextBlock Grid.Row="0" Text="Залишити відгук" 
+                   FontWeight="Bold" FontSize="18" 
+                   HorizontalAlignment="Center" Margin="0,0,0,15"/>
+
+        <!-- Ваш відгук -->
+        <TextBlock Grid.Row="1" Text="Ваш відгук:" 
+                   FontWeight="SemiBold" Margin="0,0,0,5"/>
+
+        <TextBox Grid.Row="2" x:Name="TxtFeedback" 
+                 Margin="0,0,0,15" Padding="8" 
+                 AcceptsReturn="True" TextWrapping="Wrap" 
+                 VerticalScrollBarVisibility="Auto"
+                 MinHeight="80"/>
+
+        <!-- Рейтинг -->
+        <TextBlock Grid.Row="3" Text="Рейтинг (1-5):" 
+                   FontWeight="SemiBold" Margin="0,0,0,5"/>
+
+        <TextBox Grid.Row="4" x:Name="TxtRating" 
+                 Margin="0,0,0,20" Padding="8" 
+                 MaxLength="1" 
+                 VerticalContentAlignment="Center"/>
+
+        <!-- Кнопки -->
+        <StackPanel Grid.Row="5" Orientation="Horizontal" 
+                    HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="BtnOk" Click="BtnOk_Click" 
+                    Width="100" Height="32" Margin="0,0,10,0"
+                    Content="Надіслати" FontWeight="SemiBold"/>
+            <Button x:Name="BtnCancel" Click="BtnCancel_Click" 
+                    Width="100" Height="32"
+                    Content="Скасувати"/>
+        </StackPanel>
+    </Grid>
+</Window>
+
+
+
+
+------------------------------------------------------------------------------
+
+
+
+
+FeedbackWindow.xaml.cs
+===
+
+
+using System;
+using System.Windows;
+using System.Threading.Tasks;
+using TrackingApp.ViewModels;
+
+namespace TrackingApp.Views
+{
+    public partial class FeedbackWindow : Window
+    {
+        public string FeedbackText { get; private set; }
+        public int Rating { get; private set; }
+
+        private readonly MainViewModel _viewModel;
+        private bool _isProcessing = false;
+
+        public FeedbackWindow(MainViewModel viewModel)
+        {
+            InitializeComponent();
+            _viewModel = viewModel;
+
+            // Фокус на першому полі при відкритті
+            Loaded += (s, e) => TxtFeedback.Focus();
+        }
+
+        private async void BtnOk_Click(object sender, RoutedEventArgs e)
+        {
+            // Запобігаємо повторному натисканню
+            if (_isProcessing)
+                return;
+
+            _isProcessing = true;
+            BtnOk.IsEnabled = false;
+            BtnCancel.IsEnabled = false;
+            BtnOk.Content = "Відправка...";
+
+            try
+            {
+                // Отримуємо дані з полів
+                FeedbackText = TxtFeedback.Text.Trim();
+                var ratingText = TxtRating.Text.Trim();
+
+                // Валідація даних
+                if (string.IsNullOrEmpty(FeedbackText))
+                {
+                    MessageBox.Show("Будь ласка, введіть ваш відгук!", "Помилка",
+                                  MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (string.IsNullOrEmpty(ratingText))
+                {
+                    MessageBox.Show("Будь ласка, введіть рейтинг!", "Помилка",
+                                  MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (!int.TryParse(ratingText, out int rating) || rating < 1 || rating > 5)
+                {
+                    MessageBox.Show("Рейтинг має бути числом від 1 до 5!", "Помилка",
+                                  MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                Rating = rating;
+
+                // Діагностика
+                System.Diagnostics.Debug.WriteLine($"📤 Початок відправки відгуку...");
+
+                // Відправка відгуку
+                var success = await _viewModel.SendFeedbackAsync(FeedbackText, Rating);
+
+                System.Diagnostics.Debug.WriteLine($"📤 Результат відправки: {success}");
+
+                if (success)
+                {
+                    System.Diagnostics.Debug.WriteLine("✅ Відгук успішно відправлено, закриваємо вікно");
+
+                    // ЗАКРИВАЄМО ВІКНО ПІСЛЯ УСПІШНОЇ ВІДПРАВКИ
+                    this.DialogResult = true;
+                    this.Close(); // ЯВНЕ ЗАКРИТТЯ ВІКНА
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("❌ Помилка відправки відгуку");
+                    MessageBox.Show("Не вдалося відправити відгук. Спробуйте ще раз.",
+                                  "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"💥 Критична помилка: {ex.Message}");
+                MessageBox.Show($"Сталася несподівана помилка: {ex.Message}",
+                              "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                // Відновлюємо стан кнопок
+                _isProcessing = false;
+                BtnOk.IsEnabled = true;
+                BtnCancel.IsEnabled = true;
+                BtnOk.Content = "Надіслати";
+            }
+        }
+
+        private void BtnCancel_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isProcessing) return;
+
+            this.DialogResult = false;
+            this.Close();
+        }
+
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            // Запобігаємо закриттю під час обробки
+            if (_isProcessing)
+            {
+                e.Cancel = true;
+            }
+        }
+    }
+}
+
+
+
+
+--------------------------------------------------------------
+
+
+
+LoginWindow.xaml
+====
+
+
+
+
+<Window x:Class="TrackingApp.Views.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Вхід у систему" Height="600" Width="400"
+        WindowStartupLocation="CenterScreen"
+        KeyDown="Window_KeyDown">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Статус з'єднання -->
+            <RowDefinition Height="Auto"/>
+            <!-- Зображення -->
+            <RowDefinition Height="Auto"/>
+            <!-- Заголовок -->
+            <RowDefinition Height="Auto"/>
+            <!-- Ім'я лейбл -->
+            <RowDefinition Height="Auto"/>
+            <!-- Ім'я поле -->
+            <RowDefinition Height="Auto"/>
+            <!-- Пароль лейбл -->
+            <RowDefinition Height="Auto"/>
+            <!-- Пароль поле -->
+            <RowDefinition Height="Auto"/>
+            <!-- Email лейбл -->
+            <RowDefinition Height="Auto"/>
+            <!-- Email поле -->
+            <RowDefinition Height="Auto"/>
+            <!-- Тип подорожі лейбл (тільки для реєстрації) -->
+            <RowDefinition Height="Auto"/>
+            <!-- Тип подорожі поле (тільки для реєстрації) -->
+            <RowDefinition Height="Auto"/>
+            <!-- Проміжний відступ -->
+            <RowDefinition Height="Auto"/>
+            <!-- Кнопки -->
+            <RowDefinition Height="*"/>
+            <!-- Заповнювач -->
+        </Grid.RowDefinitions>
+
+        <!-- Статус з'єднання -->
+        <TextBlock x:Name="StatusText" Grid.Row="0" 
+                   Text="Перевірка з'єднання..." 
+                   HorizontalAlignment="Center" 
+                   Margin="0,0,0,10"
+                   FontSize="11"
+                   FontWeight="SemiBold"
+                   Visibility="Collapsed"
+                   TextWrapping="Wrap"
+                   TextAlignment="Center"/>
+
+        <!-- Зображення -->
+        <Image Grid.Row="1" 
+               Source="https://drive.google.com/uc?export=view&amp;id=1skdeUtcXvdTaGcnNSNyElYTh1TpXRBBo" 
+               Width="120" Height="120" 
+               HorizontalAlignment="Center" 
+               Margin="0,0,0,20" 
+               Stretch="Uniform" />
+
+        <!-- Заголовок -->
+        <TextBlock Grid.Row="2" 
+                   Text="Авторизація / Реєстрація" 
+                   FontWeight="Bold" 
+                   FontSize="18" 
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,20"/>
+
+        <!-- Лейбл Ім'я -->
+        <TextBlock Grid.Row="3" 
+                   Text="Ім'я:" 
+                   FontWeight="SemiBold" 
+                   Margin="0,10,0,5"/>
+
+        <!-- Поле Ім'я -->
+        <TextBox Grid.Row="4" 
+                 x:Name="TxtName" 
+                 Margin="0,0,0,10"
+                 VerticalContentAlignment="Center"
+                 Padding="5"
+                 KeyDown="TxtName_KeyDown"/>
+
+        <!-- Лейбл Пароль -->
+        <TextBlock Grid.Row="5" 
+                   Text="Пароль:" 
+                   FontWeight="SemiBold" 
+                   Margin="0,10,0,5"/>
+
+        <!-- Поле Пароль -->
+        <PasswordBox Grid.Row="6" 
+                     x:Name="TxtPassword" 
+                     Margin="0,0,0,10"
+                     VerticalContentAlignment="Center"
+                     Padding="5"
+                     KeyDown="TxtPassword_KeyDown"/>
+
+        <!-- Лейбл Email -->
+        <TextBlock Grid.Row="7" 
+                   Text="Email:" 
+                   FontWeight="SemiBold" 
+                   Margin="0,10,0,5"/>
+
+        <!-- Поле Email -->
+        <TextBox Grid.Row="8" 
+                 x:Name="TxtEmail" 
+                 Margin="0,0,0,10"
+                 VerticalContentAlignment="Center"
+                 Padding="5"
+                 KeyDown="TxtEmail_KeyDown"/>
+
+        <!-- Лейбл Тип подорожі (тільки для реєстрації) -->
+        <TextBlock Grid.Row="9" 
+                   Text="Тип подорожі:" 
+                   FontWeight="SemiBold" 
+                   Margin="0,10,0,5"
+                   Visibility="{Binding IsRegisterMode, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+        <!-- Поле Тип подорожі (тільки для реєстрації) -->
+        <ComboBox Grid.Row="10" 
+                  x:Name="CmbTripType" 
+                  Margin="0,0,0,10"
+                  VerticalContentAlignment="Center"
+                  Visibility="{Binding IsRegisterMode, Converter={StaticResource BooleanToVisibilityConverter}}"
+                  KeyDown="CmbTripType_KeyDown">
+            <ComboBoxItem Content="Піша"/>
+            <ComboBoxItem Content="Вело-подорож"/>
+            <ComboBoxItem Content="Екскурсія"/>
+        </ComboBox>
+
+        <!-- Проміжний відступ -->
+        <Border Grid.Row="11" Height="20"/>
+
+        <!-- Кнопки -->
+        <StackPanel Grid.Row="12" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Center" 
+                    VerticalAlignment="Center"
+                    Margin="0,0,0,10">
+            <Button x:Name="BtnToggleMode" 
+                    Content="До реєстрації" 
+                    Click="BtnToggleMode_Click" 
+                    Style="{StaticResource SecondaryButton}" 
+                    Width="140" 
+                    Height="40"
+                    Margin="0,0,10,0"/>
+            <Button x:Name="BtnSubmit" 
+                    Content="Увійти" 
+                    Click="BtnSubmit_Click" 
+                    Style="{StaticResource PrimaryButton}" 
+                    Width="140" 
+                    Height="40"/>
+        </StackPanel>
+    </Grid>
+</Window>
+
+
+
+
+
+--------------------------------------------------------
+
+
+
+LoginWindow.xaml.cs
+===
+
+
+
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using TrackingApp.Models;
+using TrackingApp.ViewModels;
+using TrackingApp.Services;
+using TrackingApp.Config;
+
+namespace TrackingApp.Views
+{
+    public partial class LoginWindow : Window, System.ComponentModel.INotifyPropertyChanged
+    {
+        private readonly MainViewModel _vm;
+        private bool _isRegisterMode;
+        private bool _loginSuccessful = false;
+
+        public bool IsRegisterMode
+        {
+            get => _isRegisterMode;
+            set
+            {
+                _isRegisterMode = value;
+                OnPropertyChanged(nameof(IsRegisterMode));
+                BtnToggleMode.Content = _isRegisterMode ? "До авторизації" : "До реєстрації";
+                BtnSubmit.Content = _isRegisterMode ? "Зареєструватися" : "Увійти";
+            }
+        }
+
+        public LoginWindow(MainViewModel vm)
+        {
+            InitializeComponent();
+            _vm = vm;
+            DataContext = this;
+            IsRegisterMode = false;
+
+            Loaded += LoginWindow_Loaded;
+        }
+
+        private async void LoginWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            System.Diagnostics.Debug.WriteLine("=== ДІАГНОСТИКА ПІДКЛЮЧЕННЯ ===");
+            System.Diagnostics.Debug.WriteLine($"📍 Час початку: {System.DateTime.Now:HH:mm:ss}");
+
+            AppConfig.LogConfiguration();
+
+            if (AppConfig.UseServerMode)
+            {
+                StatusText.Visibility = Visibility.Visible;
+                StatusText.Text = "🔄 Перевірка з'єднання з сервером...";
+                StatusText.Foreground = System.Windows.Media.Brushes.Orange;
+
+                System.Diagnostics.Debug.WriteLine($"📍 Перевірка TCP підключення до: {AppConfig.ServerHost}:{AppConfig.ServerPort}");
+
+                var trackingService = new TrackingService();
+                bool isConnected = await trackingService.CheckServerConnectionAsync();
+
+                if (!isConnected)
+                {
+                    StatusText.Text = "❌ Не вдалося підключитися до сервера";
+                    StatusText.Foreground = System.Windows.Media.Brushes.Red;
+
+                    System.Diagnostics.Debug.WriteLine("❌ Підключення до сервера не вдалося");
+
+                    var result = MessageBox.Show(
+                        "⚠️ Не вдалося підключитися до сервера.\n\n" +
+                        "Можливі причини:\n" +
+                        "• Сервер не запущений\n" +
+                        "• Неправильний хост або порт\n" +
+                        "• Фаєрвол блокує з'єднання\n" +
+                        "• Порт зайнятий\n\n" +
+                        "Бажаєте продовжити в локальному режимі?",
+                        "Помилка з'єднання",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        System.Diagnostics.Debug.WriteLine("🔧 Перехід в локальний режим");
+                        AppConfig.UseServerMode = false;
+                        StatusText.Text = "🔧 Локальний режим";
+                        StatusText.Foreground = System.Windows.Media.Brushes.Blue;
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("🚪 Закриття додатку через помилку підключення");
+                        Close();
+                        return;
+                    }
+                }
+                else
+                {
+                    StatusText.Text = "✅ Успішно підключено до сервера";
+                    StatusText.Foreground = System.Windows.Media.Brushes.Green;
+
+                    System.Diagnostics.Debug.WriteLine("✅ Успішно підключено до сервера");
+
+                    MessageBox.Show(
+                        "✅ Успішно підключено до сервера!\n\n" +
+                        "Тепер ви можете використовувати всі функції додатку.",
+                        "Підключення",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+
+                await System.Threading.Tasks.Task.Delay(3000);
+                StatusText.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                StatusText.Visibility = Visibility.Visible;
+                StatusText.Text = "🔧 Локальний режим";
+                StatusText.Foreground = System.Windows.Media.Brushes.Blue;
+
+                System.Diagnostics.Debug.WriteLine("🔧 Локальний режим - сервер не використовується");
+
+                await System.Threading.Tasks.Task.Delay(2000);
+                StatusText.Visibility = Visibility.Collapsed;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"📍 Час завершення: {System.DateTime.Now:HH:mm:ss}");
+            System.Diagnostics.Debug.WriteLine("=== КІНЕЦЬ ДІАГНОСТИКИ ===");
+        }
+
+        private async void BtnSubmit_Click(object sender, RoutedEventArgs e)
+        {
+            var name = TxtName.Text?.Trim() ?? string.Empty;
+            var password = TxtPassword.Password?.Trim() ?? string.Empty;
+            var email = TxtEmail.Text?.Trim() ?? string.Empty;
+
+            System.Diagnostics.Debug.WriteLine($"🔐 Спроба авторизації/реєстрації:");
+            System.Diagnostics.Debug.WriteLine($"   Режим: {(IsRegisterMode ? "Реєстрація" : "Авторизація")}");
+            System.Diagnostics.Debug.WriteLine($"   Ім'я: {name}");
+            System.Diagnostics.Debug.WriteLine($"   Email: {email}");
+            System.Diagnostics.Debug.WriteLine($"   Довжина пароля: {password.Length}");
+
+            if (string.IsNullOrEmpty(name))
+            {
+                System.Diagnostics.Debug.WriteLine("❌ Помилка: не введено ім'я");
+                MessageBox.Show("Введіть ім'я!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(email))
+            {
+                System.Diagnostics.Debug.WriteLine("❌ Помилка: не введено email");
+                MessageBox.Show("Поле email не може бути порожнім!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(password))
+            {
+                System.Diagnostics.Debug.WriteLine("❌ Помилка: не введено пароль");
+                MessageBox.Show("Введіть пароль!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (password.Length < 3)
+            {
+                System.Diagnostics.Debug.WriteLine("❌ Помилка: пароль занадто короткий");
+                MessageBox.Show("Пароль занадто короткий! Мінімум 3 символи.", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // ОГОЛОШУЄМО trackingService ТІЛЬКИ ОДИН РАЗ
+            var trackingService = new TrackingService();
+
+            if (IsRegisterMode)
+            {
+                // РЕЄСТРАЦІЯ
+                System.Diagnostics.Debug.WriteLine("📝 Процес реєстрації...");
+
+                // Перевіряємо чи користувач вже існує через сервер
+                try
+                {
+                    var existingUsers = await trackingService.GetUsersAsync();
+                    if (existingUsers.Any(u => u.Name == name))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"❌ Помилка: користувач {name} вже існує");
+                        MessageBox.Show("Користувач з таким ім'ям уже існує!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"⚠️ Не вдалося перевірити наявність користувача: {ex.Message}");
+                }
+
+                bool isAdmin = email.EndsWith("@admin.com");
+                string requiredDomain = isAdmin ? "@admin.com" : "@example.com";
+
+                if (!email.EndsWith(requiredDomain))
+                {
+                    System.Diagnostics.Debug.WriteLine($"❌ Помилка: email має закінчуватися на {requiredDomain}");
+                    MessageBox.Show($"Email має закінчуватися на {requiredDomain}!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (CmbTripType.SelectedItem == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("❌ Помилка: не вибрано тип подорожі");
+                    MessageBox.Show("Виберіть тип подорожі!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                var selectedTripType = (CmbTripType.SelectedItem as ComboBoxItem)?.Content.ToString();
+                TripType tripType;
+                switch (selectedTripType)
+                {
+                    case "Піша":
+                        tripType = TripType.Walking;
+                        break;
+                    case "Вело-подорож":
+                        tripType = TripType.Cycling;
+                        break;
+                    case "Екскурсія":
+                        tripType = TripType.Excursion;
+                        break;
+                    default:
+                        System.Diagnostics.Debug.WriteLine($"❌ Помилка: невірний тип подорожі: {selectedTripType}");
+                        MessageBox.Show("Невірний тип подорожі!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"✅ Створення нового користувача:");
+                System.Diagnostics.Debug.WriteLine($"   Тип подорожі: {tripType}");
+                System.Diagnostics.Debug.WriteLine($"   Роль: {(isAdmin ? "Адміністратор" : "Користувач")}");
+
+                var newUser = new User
+                {
+                    Name = name,
+                    Password = password,
+                    CurrentLocation = new Location(49.8430, 24.0315),
+                    IsLeader = isAdmin,
+                    Email = email,
+                    TripType = tripType
+                };
+
+                // ВИПРАВЛЕННЯ: Використовуємо вже оголошений trackingService
+                var registrationSuccess = await trackingService.RegisterUserAsync(newUser, password);
+
+                if (registrationSuccess)
+                {
+                    // Додаємо користувача до локальної колекції
+                    _vm.AddUser(newUser);
+
+                    System.Diagnostics.Debug.WriteLine($"✅ Користувач {name} успішно зареєстрований в базі даних");
+
+                    MessageBox.Show(
+                        $"Реєстрацію завершено як {(isAdmin ? "адміністратор" : "користувач")}. Тепер увійдіть.",
+                        "Успіх",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+
+                    IsRegisterMode = false;
+                    TxtPassword.Password = string.Empty;
+                    System.Diagnostics.Debug.WriteLine("📍 Поля очищено після реєстрації");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"❌ Помилка реєстрації користувача {name}");
+                    MessageBox.Show(
+                        "Не вдалося зареєструвати користувача. Спробуйте ще раз.",
+                        "Помилка",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+            }
+            else
+            {
+                // АВТОРИЗАЦІЯ
+                System.Diagnostics.Debug.WriteLine("🔑 Процес авторизації...");
+
+                // ВИПРАВЛЕННЯ: Використовуємо вже оголошений trackingService
+                var user = await trackingService.AuthenticateAsync(name, password);
+
+                if (user != null && user.Email == email)
+                {
+                    System.Diagnostics.Debug.WriteLine($"✅ Користувач {name} знайдений");
+
+                    bool expectedAdmin = email.EndsWith("@admin.com");
+                    if (user.IsLeader != expectedAdmin)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"❌ Помилка: невідповідність ролі");
+                        MessageBox.Show(
+                            "Неправильний email для цієї ролі! Адміни використовують @admin.com.",
+                            "Помилка",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    _vm.CurrentUser = user;
+
+                    // Додаємо сповіщення про вхід
+                    _vm.AddNotification($"Ви увійшли як {user.Name}");
+
+                    System.Diagnostics.Debug.WriteLine($"✅ Успішна авторизація: {user.Name} ({(user.IsLeader ? "Адмін" : "Користувач")})");
+
+                    // ВИПРАВЛЕННЯ: Встановлюємо прапорець успішної авторизації
+                    _loginSuccessful = true;
+
+                    // Закриваємо вікно
+                    Close();
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("❌ Помилка: неправильне ім'я, пароль або email");
+                    MessageBox.Show(
+                        "Неправильне ім'я, пароль або email!",
+                        "Помилка",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+            }
+        }
+
+        // ВИПРАВЛЕННЯ: Додаємо властивість для перевірки успішної авторизації
+        public bool LoginSuccessful => _loginSuccessful;
+
+        private void BtnToggleMode_Click(object sender, RoutedEventArgs e)
+        {
+            System.Diagnostics.Debug.WriteLine($"🔄 Перемикання режиму: {(IsRegisterMode ? "Реєстрація → Авторизація" : "Авторизація → Реєстрація")}");
+
+            IsRegisterMode = !IsRegisterMode;
+
+            // Очищаємо поля при перемиканні режиму
+            if (!IsRegisterMode)
+            {
+                TxtPassword.Password = string.Empty;
+                System.Diagnostics.Debug.WriteLine("📍 Поля очищено при перемиканні режиму");
+            }
+        }
+
+        private void TxtPassword_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
+            {
+                System.Diagnostics.Debug.WriteLine("⌨️ Натиснуто Enter в полі пароля");
+                BtnSubmit_Click(sender, e);
+            }
+        }
+
+        private void TxtName_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
+            {
+                System.Diagnostics.Debug.WriteLine("⌨️ Натиснуто Enter в полі імені");
+                if (IsRegisterMode)
+                {
+                    TxtEmail.Focus();
+                }
+                else
+                {
+                    TxtPassword.Focus();
+                }
+            }
+        }
+
+        private void TxtEmail_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
+            {
+                System.Diagnostics.Debug.WriteLine("⌨️ Натиснуто Enter в полі email");
+                if (IsRegisterMode)
+                {
+                    CmbTripType.Focus();
+                }
+                else
+                {
+                    TxtPassword.Focus();
+                }
+            }
+        }
+
+        private void CmbTripType_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter && IsRegisterMode)
+            {
+                System.Diagnostics.Debug.WriteLine("⌨️ Натиснуто Enter в комбобоксі");
+                BtnSubmit_Click(sender, e);
+            }
+        }
+
+        private void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Escape)
+            {
+                System.Diagnostics.Debug.WriteLine("🚪 Натиснуто Escape - закриття вікна");
+                Close();
+            }
+        }
+
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            System.Diagnostics.Debug.WriteLine($"🚪 Закриття LoginWindow: LoginSuccessful = {_loginSuccessful}");
+        }
+
+        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+-----------------------------------------------------
+
+
+MainWindow.xaml
+======
+
+
+
+<Window x:Class="TrackingApp.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:TrackingApp.ViewModels"
+        xmlns:gmap="clr-namespace:GMap.NET.WindowsPresentation;assembly=GMap.NET.WindowsPresentation"
+        Title="TrackingApp — Моніторинг групи" Height="720" Width="1100"
+        MinHeight="600" MinWidth="900"
+        Loaded="Window_Loaded"
+        Closing="Window_Closing">
+
+    <Window.Resources>
+        <vm:MainViewModel x:Key="MainViewModel"/>
+    </Window.Resources>
+
+    <Window.DataContext>
+        <Binding Source="{StaticResource MainViewModel}"/>
+    </Window.DataContext>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Статус бар -->
+        <Border Grid.Row="0" Background="#F0F0F0" Padding="10" BorderBrush="LightGray" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="TrackingApp — Моніторинг групи" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusText" Grid.Column="1" 
+                          Text="Перевірка з'єднання..." 
+                          VerticalAlignment="Center"
+                          Margin="0,0,10,0"
+                          FontSize="12"
+                          FontWeight="SemiBold"
+                          Foreground="Orange"/>
+            </Grid>
+        </Border>
+
+        <!-- Основний вміст -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="320"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Лівий стовпець: Керування подорожжю -->
+            <Border Grid.Column="0" Margin="6" BorderBrush="LightGray" BorderThickness="1" CornerRadius="6">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <TextBlock Text="Керування подорожжю" Style="{StaticResource HeaderText}" Margin="0,0,0,10"/>
+
+                        <!-- Вибір маршруту для адміністратора -->
+                        <TextBlock Text="Оберіть маршрут:" FontWeight="Bold" Margin="0,5,0,5" 
+                                   Visibility="{Binding IsLeaderView, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                        <ComboBox x:Name="CmbRouteSelect" 
+                                  ItemsSource="{Binding PredefinedTrips}"
+                                  SelectedItem="{Binding SelectedPredefinedTrip}"
+                                  Margin="0,0,0,5" 
+                                  Visibility="{Binding IsLeaderView, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
+                                        <TextBlock Text="{Binding Description}" FontSize="10" Foreground="Gray"/>
+                                        <TextBlock Text="✅ Активний" FontSize="9" Foreground="Green" 
+                                                   Visibility="{Binding IsActive, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <!-- Кнопка для активації вибраного маршруту -->
+                        <Button x:Name="BtnActivateTrip" Style="{StaticResource PrimaryButton}" 
+                                Content="Активувати маршрут" 
+                                Click="BtnActivateTrip_Click"
+                                Visibility="{Binding IsLeaderView, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Margin="0,0,0,10"/>
+
+                        <!-- Кнопка для оновлення списку маршрутів -->
+                        <Button x:Name="BtnRefreshTrips" Style="{StaticResource SecondaryButton}" 
+                                Content="Оновити маршрути" 
+                                Click="BtnRefreshTrips_Click"
+                                Visibility="{Binding IsLeaderView, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Margin="0,0,0,10"/>
+
+                        <!-- Кнопки для всіх користувачів -->
+                        <Button x:Name="BtnSendHelp" Style="{StaticResource PrimaryButton}" Content="Допомога" Click="BtnSendHelp_Click" Margin="0,5,0,5"/>
+                        <Button x:Name="BtnSendStop" Style="{StaticResource SecondaryButton}" Content="Зупинка" Click="BtnSendStop_Click" Margin="0,5,0,5"/>
+                        <Button x:Name="BtnFeedback" Style="{StaticResource SecondaryButton}" Content="Залишити відгук" Click="BtnFeedback_Click" Margin="0,5,0,5"/>
+
+                        <!-- Кнопка для адміністратора -->
+                        <Button x:Name="BtnEndTrip" Style="{StaticResource SecondaryButton}" Content="Завершити подорож" Click="BtnEndTrip_Click" 
+                                Visibility="{Binding IsLeaderView, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,5,0,5"/>
+
+                        <!-- Кнопка "Планування подорожі" лише для адміністратора -->
+                        <Button x:Name="BtnPlanTrip" Style="{StaticResource PrimaryButton}" Content="Планування подорожі" Click="BtnPlanTrip_Click" 
+                                Visibility="{Binding IsLeaderView, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,5,0,5"/>
+
+                        <!-- Кнопка виходу -->
+                        <Button x:Name="BtnExit" Style="{StaticResource SecondaryButton}" Content="Вихід" Click="BtnExit_Click" Margin="0,5,0,5"/>
+
+                        <!-- План подорожі для учасника -->
+                        <StackPanel Visibility="{Binding IsParticipantView, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,15,0,0">
+                            <TextBlock Text="План подорожі" Style="{StaticResource HeaderText}" Margin="0,0,0,5"/>
+                            <TextBlock Text="Назва:" FontWeight="Bold" Margin="0,5,0,0"/>
+                            <TextBlock Text="{Binding CurrentTrip.TripName}" Margin="0,0,0,5"/>
+
+                            <TextBlock Text="Тривалість:" FontWeight="Bold" Margin="0,5,0,0"/>
+                            <TextBlock Text="{Binding CurrentTrip.Duration}" Margin="0,0,0,5"/>
+
+                            <TextBlock Text="Графік перерв:" FontWeight="Bold" Margin="0,5,0,0"/>
+                            <TextBlock Text="{Binding CurrentTrip.BreakSchedule}" Margin="0,0,0,5"/>
+
+                            <TextBlock Text="Місця відпочинку:" FontWeight="Bold" Margin="0,5,0,0"/>
+                            <ItemsControl ItemsSource="{Binding CurrentTrip.RestPlaces}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" Margin="0,0,0,2"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="Цікаві місця:" FontWeight="Bold" Margin="0,10,0,0"/>
+                            <ItemsControl ItemsSource="{Binding CurrentTrip.PointsOfInterest}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" Margin="0,0,0,2"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- Список користувачів для адміна -->
+                        <StackPanel Visibility="{Binding IsLeaderView, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,15,0,0">
+                            <TextBlock Text="Усі користувачі" Style="{StaticResource HeaderText}" Margin="0,0,0,5"/>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="250">
+                                <ListBox x:Name="UsersListBox" ItemsSource="{Binding Users}" SelectedItem="{Binding SelectedUser}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" Margin="4">
+                                                <Ellipse Width="12" Height="12" Fill="{Binding IsLeader, Converter={StaticResource BoolToBrushConverter}}" Margin="0,0,8,0"/>
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Status}" Foreground="Red" Margin="8,0,0,0" 
+                                                           Visibility="{Binding Status, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Карта: Доступна для всіх -->
+            <Border Grid.Column="1" Margin="8" BorderBrush="LightGray" BorderThickness="1" CornerRadius="6">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="{Binding CurrentTrip.TripName}" FontWeight="Bold" Margin="8" VerticalAlignment="Center"/>
+                    <gmap:GMapControl x:Name="MapControl" Grid.Row="1" Margin="8"/>
+                </Grid>
+            </Border>
+
+            <!-- Права панель: Деталі для адміна або статус для учасника -->
+            <Border Grid.Column="2" Margin="6" BorderBrush="LightGray" BorderThickness="1" CornerRadius="6">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10">
+                            <StackPanel x:Name="AdminPanel" Visibility="{Binding IsLeaderView, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Text="Деталі користувача" Style="{StaticResource HeaderText}" Margin="0,0,0,10"/>
+
+                                <TextBlock Text="Ім'я:" FontWeight="Bold" Margin="0,5,0,0"/>
+                                <TextBlock Text="{Binding SelectedUser.Name}" Margin="0,0,0,5"/>
+
+                                <TextBlock Text="Email:" FontWeight="Bold" Margin="0,5,0,0"/>
+                                <TextBlock Text="{Binding SelectedUser.Email}" Margin="0,0,0,5"/>
+
+                                <TextBlock Text="Координати:" FontWeight="Bold" Margin="0,5,0,0"/>
+                                <TextBlock Text="{Binding SelectedUser.CurrentLocation}" Margin="0,0,0,5"/>
+
+                                <TextBlock Text="Статус:" FontWeight="Bold" Margin="0,5,0,0"/>
+                                <TextBlock Text="{Binding SelectedUser.Status}" Margin="0,0,0,5"/>
+
+                                <Button x:Name="BtnMakeLeader" Style="{StaticResource PrimaryButton}" Content="Позначити як лідера" 
+                                        Margin="0,10,0,5" Click="BtnMakeLeader_Click"
+                                        Visibility="{Binding IsLeaderView, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                                <TextBlock Text="Маршрут (точки)" FontWeight="Bold" FontSize="16" Margin="0,15,0,5"/>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="120">
+                                    <ItemsControl ItemsSource="{Binding CurrentTrip.Route}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" Margin="0,0,0,5"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+
+                                <Button x:Name="BtnClearRoute" Style="{StaticResource SecondaryButton}" Content="Очистити маршрут" 
+                                        Margin="0,10,0,5" Click="BtnClearRoute_Click"
+                                        Visibility="{Binding IsLeaderView, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                                <TextBlock Text="Останні сповіщення" Style="{StaticResource HeaderText}" Margin="0,15,0,5"/>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="300">
+                                    <ListBox x:Name="NotificationsListBox" ItemsSource="{Binding AllNotifications}" 
+                                             Visibility="{Binding ShowNotifications, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="0,5">
+                                                    <TextBlock Text="{Binding Time, StringFormat='{}{0:HH:mm:ss}'}" 
+                                                               FontSize="11" Foreground="Gray" Margin="0,0,0,2"/>
+                                                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" 
+                                                               Margin="0,0,0,5"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </ScrollViewer>
+                            </StackPanel>
+
+                            <StackPanel x:Name="UserPanel" Visibility="{Binding IsParticipantView, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Text="Ваш акаунт" Style="{StaticResource HeaderText}" Margin="0,0,0,10"/>
+                                <TextBlock Text="Ім'я:" FontWeight="Bold" Margin="0,5,0,0"/>
+                                <TextBlock Text="{Binding CurrentUser.Name}" Margin="0,0,0,5"/>
+
+                                <TextBlock Text="Email:" FontWeight="Bold" Margin="0,5,0,0"/>
+                                <TextBlock Text="{Binding CurrentUser.Email}" Margin="0,0,0,5"/>
+
+                                <TextBlock Text="Координати:" FontWeight="Bold" Margin="0,5,0,0"/>
+                                <TextBlock Text="{Binding CurrentUser.CurrentLocation}" Margin="0,0,0,5"/>
+
+                                <TextBlock Text="Статус:" FontWeight="Bold" Margin="0,5,0,0"/>
+                                <TextBlock Text="{Binding CurrentUser.Status}" Margin="0,0,0,5"/>
+
+                                <TextBlock Text="Ваші сповіщення" Style="{StaticResource HeaderText}" Margin="0,15,0,5"/>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="300">
+                                    <ListBox x:Name="UserNotificationsListBox" ItemsSource="{Binding UserNotifications}" 
+                                             Visibility="{Binding ShowNotifications, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="0,5">
+                                                    <TextBlock Text="{Binding Time, StringFormat='{}{0:HH:mm:ss}'}" 
+                                                               FontSize="11" Foreground="Gray" Margin="0,0,0,2"/>
+                                                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" 
+                                                               Margin="0,0,0,5"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Кнопка для вмикання/вимикання сповіщень -->
+                    <Button x:Name="BtnToggleNotifications" Grid.Row="1" Content="Вимкнути сповіщення" 
+                            Style="{StaticResource SecondaryButton}" Width="150" Margin="0,10,10,10" 
+                            HorizontalAlignment="Right" Click="BtnToggleNotifications_Click"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
+
+
+
+
+
+
+
+
+-----------------------------------------------------------------------------
+
+
+
+
+MainWindow.xaml.cs
+====
+
+
+
+
+
+using GMap.NET;
+using GMap.NET.MapProviders;
+using GMap.NET.WindowsPresentation;
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Shapes;
+using System.Threading.Tasks;
+using TrackingApp.Models;
+using TrackingApp.ViewModels;
+using TrackingApp.Services;
+using TrackingApp.Config;
+
+namespace TrackingApp.Views
+{
+    public partial class MainWindow : Window
+    {
+        private MainViewModel Vm => (MainViewModel)DataContext;
+        private GMapRoute _routeMarker;
+        private Dictionary<User, GMapMarker> _userMarkers = new Dictionary<User, GMapMarker>();
+        private bool _isInitialized = false;
+
+        public MainWindow()
+        {
+            InitializeComponent();
+
+            InitializeMap();
+
+            Vm.PropertyChanged += Vm_PropertyChanged;
+            Vm.Users.CollectionChanged += Users_CollectionChanged;
+
+            if (Vm.CurrentTrip?.Route != null)
+            {
+                Vm.CurrentTrip.Route.CollectionChanged += Route_CollectionChanged;
+            }
+
+            Vm.MapUpdateRequested += () => UpdateMap();
+
+            foreach (var user in Vm.Users)
+            {
+                user.PropertyChanged += User_PropertyChanged;
+            }
+
+            MapControl.MouseLeftButtonDown += MapControl_MouseLeftButtonDown;
+
+            ShowLoginWindow();
+        }
+
+        private void ShowLoginWindow()
+        {
+            var loginWindow = new LoginWindow(Vm);
+            loginWindow.ShowDialog();
+
+            if (loginWindow.LoginSuccessful)
+            {
+                _isInitialized = true;
+                UpdateMap();
+                System.Diagnostics.Debug.WriteLine("✅ Авторизація успішна, оновлюємо карту");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("❌ Авторизація не вдалася, закриваємо додаток");
+                Close();
+                return;
+            }
+        }
+
+        private void InitializeMap()
+        {
+            try
+            {
+                GMap.NET.GMaps.Instance.Mode = AccessMode.ServerAndCache;
+                MapControl.MapProvider = GMapProviders.OpenStreetMap;
+                MapControl.MinZoom = 2;
+                MapControl.MaxZoom = 18;
+                MapControl.Zoom = 14;
+                MapControl.Position = new PointLatLng(49.842957, 24.031111);
+                MapControl.ShowCenter = false;
+                MapControl.MouseWheelZoomType = MouseWheelZoomType.MousePositionAndCenter;
+
+                System.Diagnostics.Debug.WriteLine("✅ Карта успішно ініціалізована");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка ініціалізації карти: {ex.Message}");
+                MessageBox.Show($"Помилка ініціалізації карти: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void Window_Loaded(object sender, RoutedEventArgs e)
+        {
+            await CheckConnectionStatus();
+        }
+
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            Vm.EndTrip();
+            System.Diagnostics.Debug.WriteLine("🛑 Додаток закривається, зупиняємо таймери");
+        }
+
+        private async System.Threading.Tasks.Task CheckConnectionStatus()
+        {
+            if (AppConfig.UseServerMode)
+            {
+                StatusText.Text = "🔄 Перевірка з'єднання...";
+                StatusText.Foreground = Brushes.Orange;
+
+                var trackingService = new TrackingService();
+                bool isConnected = await trackingService.CheckServerConnectionAsync();
+
+                if (isConnected)
+                {
+                    StatusText.Text = "✅ З'єднано з сервером";
+                    StatusText.Foreground = Brushes.Green;
+                }
+                else
+                {
+                    StatusText.Text = "❌ Відключено від сервера";
+                    StatusText.Foreground = Brushes.Red;
+
+                    Vm.AddNotification("Увага: немає з'єднання з сервером! Дані можуть бути не актуальними.");
+                }
+            }
+            else
+            {
+                StatusText.Text = "🔧 Локальний режим";
+                StatusText.Foreground = Brushes.Blue;
+            }
+        }
+
+        private void User_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(User.CurrentLocation) || e.PropertyName == nameof(User.Status) || e.PropertyName == nameof(User.IsLeader))
+            {
+                Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    UpdateUserMarker((User)sender);
+                });
+            }
+        }
+
+        private async void MapControl_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!Vm.IsLeaderView) return;
+
+            var point = e.GetPosition(MapControl);
+            var latLng = MapControl.FromLocalToLatLng((int)point.X, (int)point.Y);
+            var newLocation = new TrackingApp.Models.Location(latLng.Lat, latLng.Lng);
+
+            Vm.CurrentTrip.Route.Add(newLocation);
+            Vm.AddNotification($"Додано точку маршруту: {newLocation}");
+
+            await Vm.SaveCurrentTripToServer();
+
+            UpdateMap();
+        }
+
+        private void Vm_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(Vm.CurrentTrip) || e.PropertyName == nameof(Vm.Users) ||
+                e.PropertyName == nameof(Vm.ShowNotifications) || e.PropertyName == nameof(Vm.CurrentUser) ||
+                e.PropertyName == nameof(Vm.PredefinedTrips) || e.PropertyName == nameof(Vm.SelectedPredefinedTrip))
+            {
+                UpdateMap();
+            }
+        }
+
+        private void Users_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.NewItems != null)
+            {
+                foreach (User newUser in e.NewItems)
+                {
+                    newUser.PropertyChanged += User_PropertyChanged;
+                }
+            }
+
+            if (e.OldItems != null)
+            {
+                foreach (User oldUser in e.OldItems)
+                {
+                    oldUser.PropertyChanged -= User_PropertyChanged;
+                    if (_userMarkers.ContainsKey(oldUser))
+                    {
+                        MapControl.Markers.Remove(_userMarkers[oldUser]);
+                        _userMarkers.Remove(oldUser);
+                    }
+                }
+            }
+
+            UpdateMap();
+        }
+
+        private void Route_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            UpdateMap();
+        }
+
+        private void UpdateMap()
+        {
+            if (!_isInitialized) return;
+
+            try
+            {
+                Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    MapControl.Markers.Clear();
+                    _userMarkers.Clear();
+
+                    if (Vm.CurrentTrip?.Route != null)
+                    {
+                        foreach (var p in Vm.CurrentTrip.Route)
+                        {
+                            var marker = new GMapMarker(new PointLatLng(p.Latitude, p.Longitude))
+                            {
+                                Shape = new Ellipse { Width = 8, Height = 8, Fill = Brushes.DarkBlue },
+                                Offset = new System.Windows.Point(-4, -4)
+                            };
+                            MapControl.Markers.Add(marker);
+                        }
+
+                        if (Vm.CurrentTrip.Route.Count > 1)
+                        {
+                            var routePoints = new List<PointLatLng>();
+                            foreach (var loc in Vm.CurrentTrip.Route)
+                            {
+                                routePoints.Add(new PointLatLng(loc.Latitude, loc.Longitude));
+                            }
+
+                            if (_routeMarker != null)
+                            {
+                                MapControl.Markers.Remove(_routeMarker);
+                            }
+
+                            _routeMarker = new GMapRoute(routePoints)
+                            {
+                                Shape = new Path
+                                {
+                                    Stroke = Brushes.Blue,
+                                    StrokeThickness = 3,
+                                    Opacity = 0.7
+                                }
+                            };
+                            MapControl.Markers.Add(_routeMarker);
+                        }
+                    }
+
+                    foreach (var u in Vm.Users)
+                    {
+                        AddUserMarker(u);
+                    }
+
+                    if (Vm.CurrentTrip?.Route != null && Vm.CurrentTrip.Route.Count > 0)
+                    {
+                        var startPoint = Vm.CurrentTrip.Route[0];
+                        MapControl.Position = new PointLatLng(startPoint.Latitude, startPoint.Longitude);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка оновлення карти: {ex.Message}");
+                Vm.AddNotification($"Помилка оновлення карти: {ex.Message}");
+            }
+        }
+
+        private void AddUserMarker(User user)
+        {
+            if (user.CurrentLocation == null) return;
+
+            var point = new PointLatLng(user.CurrentLocation.Latitude, user.CurrentLocation.Longitude);
+
+            Brush fillBrush;
+            if (user.Status == UserStatus.Help)
+            {
+                fillBrush = Brushes.Orange;
+            }
+            else if (user.Status == UserStatus.Stop)
+            {
+                fillBrush = Brushes.Purple;
+            }
+            else if (user.IsLeader)
+            {
+                fillBrush = Brushes.Red;
+            }
+            else
+            {
+                fillBrush = Brushes.Green;
+            }
+
+            var ellipse = new Ellipse
+            {
+                Width = 14,
+                Height = 14,
+                Fill = fillBrush,
+                Stroke = Brushes.Black,
+                StrokeThickness = 1
+            };
+
+            var statusText = user.Status switch
+            {
+                UserStatus.Help => "❗",
+                UserStatus.Stop => "🛑",
+                _ => user.IsLeader ? "👑" : ""
+            };
+
+            var textBlock = new TextBlock
+            {
+                Text = $"{user.Name} {statusText}",
+                Foreground = Brushes.Black,
+                FontSize = 9,
+                FontWeight = FontWeights.Bold,
+                Background = Brushes.White,
+                Padding = new Thickness(2),
+                Opacity = 0.9
+            };
+
+            var stackPanel = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Children = { ellipse, textBlock }
+            };
+
+            var marker = new GMapMarker(point)
+            {
+                Shape = stackPanel,
+                Offset = new System.Windows.Point(-7, -7)
+            };
+
+            MapControl.Markers.Add(marker);
+            _userMarkers[user] = marker;
+        }
+
+        private void UpdateUserMarker(User user)
+        {
+            if (_userMarkers.ContainsKey(user))
+            {
+                var marker = _userMarkers[user];
+                marker.Position = new PointLatLng(user.CurrentLocation.Latitude, user.CurrentLocation.Longitude);
+
+                var stackPanel = marker.Shape as StackPanel;
+                if (stackPanel != null && stackPanel.Children.Count > 0)
+                {
+                    var ellipse = stackPanel.Children[0] as Ellipse;
+                    var textBlock = stackPanel.Children[1] as TextBlock;
+
+                    if (ellipse != null && textBlock != null)
+                    {
+                        Brush fillBrush;
+                        if (user.Status == UserStatus.Help)
+                        {
+                            fillBrush = Brushes.Orange;
+                        }
+                        else if (user.Status == UserStatus.Stop)
+                        {
+                            fillBrush = Brushes.Purple;
+                        }
+                        else if (user.IsLeader)
+                        {
+                            fillBrush = Brushes.Red;
+                        }
+                        else
+                        {
+                            fillBrush = Brushes.Green;
+                        }
+                        ellipse.Fill = fillBrush;
+
+                        var statusText = user.Status switch
+                        {
+                            UserStatus.Help => "❗",
+                            UserStatus.Stop => "🛑",
+                            _ => user.IsLeader ? "👑" : ""
+                        };
+                        textBlock.Text = $"{user.Name} {statusText}";
+                    }
+                }
+            }
+            else
+            {
+                AddUserMarker(user);
+            }
+        }
+
+        private async void BtnActivateTrip_Click(object sender, RoutedEventArgs e)
+        {
+            if (!Vm.IsLeaderView)
+            {
+                MessageBox.Show("Тільки адміністратор може активувати маршрути!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (Vm.SelectedPredefinedTrip == null)
+            {
+                MessageBox.Show("Будь ласка, виберіть маршрут зі списку!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"🎯 Користувач явно активує маршрут: {Vm.SelectedPredefinedTrip.Name}");
+
+                await Vm.SetActiveTripAsync();
+
+                UpdateMap();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка активації маршруту: {ex.Message}");
+                MessageBox.Show($"Помилка активації маршруту: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void CmbRouteSelect_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!Vm.IsLeaderView || Vm.SelectedPredefinedTrip == null)
+                return;
+
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"📋 Обрано маршрут для перегляду: {Vm.SelectedPredefinedTrip.Name}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка вибору маршруту: {ex.Message}");
+            }
+        }
+
+        private async void BtnRefreshTrips_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("🔄 Оновлення списку маршрутів...");
+                await Vm.LoadPredefinedTripsAsync();
+                Vm.AddNotification("✅ Список маршрутів оновлено");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Помилка оновлення маршрутів: {ex.Message}");
+                Vm.AddNotification("❌ Помилка оновлення маршрутів");
+            }
+        }
+
+        private void BtnFeedback_Click(object sender, RoutedEventArgs e)
+        {
+            var w = new FeedbackWindow(Vm);
+            if (w.ShowDialog() == true)
+            {
+                System.Diagnostics.Debug.WriteLine("✅ Відгук успішно оброблено");
+            }
+        }
+
+        private void BtnPlanTrip_Click(object sender, RoutedEventArgs e)
+        {
+            var planWindow = new PlanTripWindow(Vm);
+            if (planWindow.ShowDialog() == true)
+            {
+                Vm.UpdateTripPlan(planWindow.Duration, planWindow.BreakSchedule, planWindow.RestPlaces, planWindow.PointsOfInterest);
+            }
+        }
+
+        private void BtnSendHelp_Click(object sender, RoutedEventArgs e)
+        {
+            if (Vm.CurrentUser != null)
+            {
+                Vm.SendHelpRequest();
+            }
+            else
+            {
+                MessageBox.Show("Будь ласка, увійдіть в систему!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void BtnSendStop_Click(object sender, RoutedEventArgs e)
+        {
+            if (Vm.CurrentUser != null)
+            {
+                Vm.SendStopRequest();
+            }
+            else
+            {
+                MessageBox.Show("Будь ласка, увійдіть в систему!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void BtnEndTrip_Click(object sender, RoutedEventArgs e)
+        {
+            if (!Vm.IsLeaderView)
+            {
+                MessageBox.Show("Тільки адміністратор може завершити подорож!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var result = MessageBox.Show("Чи справді ви хочете завершити подорож?", "Підтвердження",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result == MessageBoxResult.Yes)
+            {
+                Vm.EndTrip();
+                MessageBox.Show("Подорож завершено.", "Інформація", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        private void BtnMakeLeader_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (Vm.SelectedUser == null)
+                {
+                    MessageBox.Show("Виберіть користувача!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                foreach (var u in Vm.Users)
+                    u.IsLeader = false;
+
+                Vm.SelectedUser.IsLeader = true;
+                Vm.SelectedUser.Email = $"{Vm.SelectedUser.Name}@admin.com";
+
+                Vm.AddUser(Vm.SelectedUser);
+
+                Vm.AddNotification($"{Vm.SelectedUser.Name} призначено лідером");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Помилка: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void BtnClearRoute_Click(object sender, RoutedEventArgs e)
+        {
+            if (!Vm.IsLeaderView)
+            {
+                MessageBox.Show("Тільки адміністратор може очищати маршрут!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var result = MessageBox.Show("Чи справді ви хочете очистити маршрут?", "Підтвердження",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result == MessageBoxResult.Yes)
+            {
+                Vm.ClearRoute();
+                UpdateMap();
+            }
+        }
+
+        private void BtnExit_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show("Чи справді ви хочете вийти?", "Підтвердження виходу",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result == MessageBoxResult.Yes)
+            {
+                Vm.CurrentUser = null;
+                var loginWindow = new LoginWindow(Vm);
+                loginWindow.Show();
+                Close();
+            }
+        }
+
+        private void BtnToggleNotifications_Click(object sender, RoutedEventArgs e)
+        {
+            Vm.ShowNotifications = !Vm.ShowNotifications;
+            BtnToggleNotifications.Content = Vm.ShowNotifications ? "Вимкнути сповіщення" : "Увімкнути сповіщення";
+        }
+
+        private void BtnDeleteUser_Click(object sender, RoutedEventArgs e)
+        {
+            if (Vm.SelectedUser == null)
+            {
+                MessageBox.Show("Виберіть користувача для видалення", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (Vm.SelectedUser.IsLeader)
+            {
+                MessageBox.Show("Не можна видалити лідера!", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var result = MessageBox.Show($"Видалити користувача {Vm.SelectedUser.Name}?",
+                                "Підтвердження",
+                                MessageBoxButton.YesNo,
+                                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                Vm.DeleteUser(Vm.SelectedUser.Name);
+            }
+        }
+    }
+}
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------
+
+
+
+PlanTripWindow.xaml
+====
+
+
+
+<Window x:Class="TrackingApp.Views.PlanTripWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Планування подорожі" Height="450" Width="400"
+        MinHeight="350" MinWidth="350"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Заголовок -->
+            <RowDefinition Height="Auto"/>
+            <!-- Проміжок -->
+            <RowDefinition Height="Auto"/>
+            <!-- Графік перерв: Лейбл -->
+            <RowDefinition Height="Auto"/>
+            <!-- Графік перерв: Поле -->
+            <RowDefinition Height="Auto"/>
+            <!-- Проміжок -->
+            <RowDefinition Height="Auto"/>
+            <!-- Місця відпочинку: Лейбл -->
+            <RowDefinition Height="Auto"/>
+            <!-- Місця відпочинку: Поле -->
+            <RowDefinition Height="Auto"/>
+            <!-- Проміжок -->
+            <RowDefinition Height="Auto"/>
+            <!-- Фотозони: Лейбл -->
+            <RowDefinition Height="Auto"/>
+            <!-- Фотозони: Поле -->
+            <RowDefinition Height="Auto"/>
+            <!-- Проміжок -->
+            <RowDefinition Height="Auto"/>
+            <!-- Кнопки -->
+            <RowDefinition Height="*"/>
+            <!-- Заповнювач -->
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <TextBlock Grid.Row="0" Text="Планування подорожі" FontWeight="Bold" FontSize="16" 
+                   HorizontalAlignment="Center" Margin="0,0,0,15"/>
+
+        <!-- Проміжок -->
+        <Border Grid.Row="1" Height="10"/>
+
+        <!-- Графік перерв: Лейбл -->
+        <TextBlock Grid.Row="2" Text="Графік перерв:" FontWeight="Bold" Margin="0,10,0,5"/>
+
+        <!-- Графік перерв: Поле -->
+        <TextBox Grid.Row="3" x:Name="TxtBreakSchedule" Margin="0,0,0,10" 
+                 Text="{Binding CurrentTrip.BreakSchedule, UpdateSourceTrigger=PropertyChanged}" 
+                 VerticalContentAlignment="Center" Padding="5" 
+                 AcceptsReturn="True" TextWrapping="Wrap"/>
+
+        <!-- Проміжок -->
+        <Border Grid.Row="4" Height="10"/>
+
+        <!-- Місця відпочинку: Лейбл -->
+        <TextBlock Grid.Row="5" Text="Місця відпочинку (через кому):" FontWeight="Bold" Margin="0,10,0,5"/>
+
+        <!-- Місця відпочинку: Поле -->
+        <TextBox Grid.Row="6" x:Name="TxtRestPlaces" Margin="0,0,0,10" 
+                 VerticalContentAlignment="Center" Padding="5" 
+                 AcceptsReturn="True" TextWrapping="Wrap"/>
+
+        <!-- Проміжок -->
+        <Border Grid.Row="7" Height="10"/>
+
+        <!-- Фотозони: Лейбл -->
+        <TextBlock Grid.Row="8" Text="Фотозони / історичні місця (через кому):" FontWeight="Bold" Margin="0,10,0,5"/>
+
+        <!-- Фотозони: Поле -->
+        <TextBox Grid.Row="9" x:Name="TxtPointsOfInterest" Margin="0,0,0,10" 
+                 VerticalContentAlignment="Center" Padding="5" 
+                 AcceptsReturn="True" TextWrapping="Wrap"/>
+
+        <!-- Проміжок -->
+        <Border Grid.Row="10" Height="10"/>
+
+        <!-- Кнопки -->
+        <StackPanel Grid.Row="11" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,10">
+            <Button x:Name="BtnOk" Click="BtnOk_Click" Width="90" Margin="0,0,8,0">Оновити</Button>
+            <Button x:Name="BtnCancel" Click="BtnCancel_Click" Width="90">Відміна</Button>
+        </StackPanel>
+    </Grid>
+</Window>
+
+
+
+
+-----------------------------------------------------------------------------------
+
+
+
+PlanTripWindow.xaml.cs
+===
+
+
+
+using System;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Windows;
+using TrackingApp.ViewModels;
+
+namespace TrackingApp.Views
+{
+    public partial class PlanTripWindow : Window
+    {
+        private readonly MainViewModel _vm;
+        public string Duration { get; set; }
+        public string BreakSchedule { get; set; }
+        public ObservableCollection<string> RestPlaces { get; set; }
+        public ObservableCollection<string> PointsOfInterest { get; set; }
+
+        public PlanTripWindow(MainViewModel vm)
+        {
+            InitializeComponent();
+            _vm = vm;
+            DataContext = _vm;
+
+            // Ініціалізація значень
+            BreakSchedule = _vm.CurrentTrip.BreakSchedule;
+            RestPlaces = new ObservableCollection<string>(_vm.CurrentTrip.RestPlaces);
+            PointsOfInterest = new ObservableCollection<string>(_vm.CurrentTrip.PointsOfInterest);
+
+            // Заповнення полів для відображення
+            TxtBreakSchedule.Text = BreakSchedule;
+            TxtRestPlaces.Text = string.Join(", ", RestPlaces);
+            TxtPointsOfInterest.Text = string.Join(", ", PointsOfInterest);
+
+            // Обмеження для звичайного користувача
+            if (!_vm.IsLeaderView)
+            {
+                MessageBox.Show("Тільки адміністратор може редагувати план подорожі!");
+                TxtBreakSchedule.IsEnabled = false;
+                TxtRestPlaces.IsEnabled = false;
+                TxtPointsOfInterest.IsEnabled = false;
+                BtnOk.IsEnabled = false;
+            }
+        }
+
+        private void BtnOk_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(TxtBreakSchedule.Text))
+            {
+                MessageBox.Show("Введіть графік перерв!");
+                return;
+            }
+
+            BreakSchedule = TxtBreakSchedule.Text.Trim();
+            RestPlaces = new ObservableCollection<string>(TxtRestPlaces.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
+            PointsOfInterest = new ObservableCollection<string>(TxtPointsOfInterest.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
+
+            DialogResult = true;
+            Close();
+        }
+
+        private void BtnCancel_Click(object sender, RoutedEventArgs e)
+        {
+            DialogResult = false;
+            Close();
+        }
+    }
+}
+
+
+
+-------------------------------------------------------------------------
+
+
+
+
+
+------------------------------------------------------------------------
+
+
+App.xaml
+===
+
+
+
+<Application x:Class="TrackingApp.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="Views/MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Themes/Styles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
+
+
+
+----------------------------------------------------------------------
+
+
+
+App.xaml.cs
+===
+
+
+
+using System.Windows;
+
+namespace TrackingApp
+{
+    public partial class App : Application
+    {
+    }
+}
+
+
+
+
+---------------------------------------------------------------------------
+
+
+
+
+FodyWeavers.xml
+===
+
+
+
+<Weavers xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="FodyWeavers.xsd">
+  <Costura />
+</Weavers>
+
+
+------------------------------------------------------------------------------
+
+
+
+-----------------------
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Costura.Fody" Version="6.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="GMap.NET.Core" Version="2.1.7" />
+    <PackageReference Include="GMap.NET.WinPresentation" Version="2.1.7" />
+  </ItemGroup>
+
+</Project>
+--------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

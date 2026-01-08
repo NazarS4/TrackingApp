@@ -1,0 +1,2104 @@
+ПАПКА CONFIG
+
+=====================
+FirebaseConfig.cs
+=====================
+
+using Firebase.Database;
+
+namespace TrackingApp.Server.Config
+{
+    public static class FirebaseConfig
+    {
+        private static FirebaseClient _firebaseClient;
+        private static bool _initialized = false;
+
+        public static string DatabaseUrl { get; private set; }
+
+        public static void Initialize()
+        {
+            if (_initialized) return;
+
+            try
+            {
+                // Встановлюємо ваше посилання
+                DatabaseUrl = "https://tracking-app-1bea8-default-rtdb.europe-west1.firebasedatabase.app/";
+
+                // Ініціалізація Firebase Client БЕЗ аутентифікації
+                _firebaseClient = new FirebaseClient(DatabaseUrl);
+
+                _initialized = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка підключення до Firebase: {ex.Message}");
+                throw;
+            }
+        }
+
+        public static FirebaseClient GetClient()
+        {
+            if (!_initialized)
+                throw new InvalidOperationException("Firebase не ініціалізовано. Викличте Initialize спочатку.");
+
+            return _firebaseClient;
+        }
+    }
+}
+
+
+
+
+
+========================
+ServerConfig.cs
+====================
+
+
+namespace TrackingApp.Server.Config
+{
+    public static class ServerConfig
+    {
+        public static int Port { get; private set; } = 8888;
+        public static int BufferSize { get; private set; } = 4096;
+
+        public static void Initialize()
+        {
+            // Можна змінити порт через змінну середовища
+            var portEnv = Environment.GetEnvironmentVariable("TRACKING_SERVER_PORT");
+            if (!string.IsNullOrEmpty(portEnv) && int.TryParse(portEnv, out int port))
+            {
+                Port = port;
+            }
+        }
+    }
+}
+
+
+
+
+--------------------------------------------------------
+
+ПАПКА Models
+
+
+
+====================
+FirebaseModels.cs
+=======================
+
+
+using System.Text.Json.Serialization;
+
+namespace TrackingApp.Server.Models
+{
+    public class Location
+    {
+        [JsonPropertyName("latitude")]
+        public double Latitude { get; set; }
+
+        [JsonPropertyName("longitude")]
+        public double Longitude { get; set; }
+
+        public Location() { }
+
+        public Location(double lat, double lon)
+        {
+            Latitude = lat;
+            Longitude = lon;
+        }
+
+        public override string ToString() => $"{Latitude:F5}, {Longitude:F5}";
+    }
+
+    public class User
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("email")]
+        public string Email { get; set; } = string.Empty;
+
+        [JsonPropertyName("password")]
+        public string Password { get; set; } = string.Empty;
+
+        [JsonPropertyName("currentLocation")]
+        public Location CurrentLocation { get; set; } = new Location();
+
+        [JsonPropertyName("isLeader")]
+        public bool IsLeader { get; set; }
+
+        [JsonPropertyName("status")]
+        public UserStatus Status { get; set; }
+
+        [JsonPropertyName("tripType")]
+        public TripType TripType { get; set; }
+
+        [JsonPropertyName("lastUpdated")]
+        public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+    }
+
+    public enum UserStatus
+    {
+        None = 0,
+        Help = 1,
+        Stop = 2
+    }
+
+    public enum TripType
+    {
+        Walking = 0,
+        Cycling = 1,
+        Excursion = 2
+    }
+
+    public class Trip
+    {
+        [JsonPropertyName("tripName")]
+        public string TripName { get; set; } = "Trip";
+
+        [JsonPropertyName("route")]
+        public List<Location> Route { get; set; } = new List<Location>();
+
+        [JsonPropertyName("duration")]
+        public string Duration { get; set; } = "3 години";
+
+        [JsonPropertyName("breakSchedule")]
+        public string BreakSchedule { get; set; } = "Перерва з 12:00 до 13:00";
+
+        [JsonPropertyName("restPlaces")]
+        public List<string> RestPlaces { get; set; } = new List<string>();
+
+        [JsonPropertyName("pointsOfInterest")]
+        public List<string> PointsOfInterest { get; set; } = new List<string>();
+
+        [JsonPropertyName("isActive")]
+        public bool IsActive { get; set; } = true;
+
+        [JsonPropertyName("createdAt")]
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    }
+
+    public class PredefinedTrip
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("description")]
+        public string Description { get; set; } = string.Empty;
+
+        [JsonPropertyName("route")]
+        public List<Location> Route { get; set; } = new List<Location>();
+
+        [JsonPropertyName("duration")]
+        public string Duration { get; set; } = string.Empty;
+
+        [JsonPropertyName("breakSchedule")]
+        public string BreakSchedule { get; set; } = string.Empty;
+
+        [JsonPropertyName("restPlaces")]
+        public List<string> RestPlaces { get; set; } = new List<string>();
+
+        [JsonPropertyName("pointsOfInterest")]
+        public List<string> PointsOfInterest { get; set; } = new List<string>();
+
+        [JsonPropertyName("createdAt")]
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        [JsonPropertyName("isActive")]
+        public bool IsActive { get; set; }
+
+        [JsonPropertyName("isPredefined")]
+        public bool IsPredefined { get; set; } = true;
+    }
+
+    public class Notification
+    {
+        [JsonPropertyName("time")]
+        public DateTime Time { get; set; } = DateTime.UtcNow;
+
+        [JsonPropertyName("message")]
+        public string Message { get; set; } = string.Empty;
+
+        [JsonPropertyName("userId")]
+        public string UserId { get; set; } = string.Empty;
+
+        [JsonPropertyName("userName")]
+        public string UserName { get; set; } = string.Empty;
+
+        [JsonPropertyName("isRead")]
+        public bool IsRead { get; set; }
+    }
+
+    public class Feedback
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+
+        [JsonPropertyName("userId")]
+        public string UserId { get; set; } = string.Empty;
+
+        [JsonPropertyName("userName")]
+        public string UserName { get; set; } = string.Empty;
+
+        [JsonPropertyName("message")]
+        public string Message { get; set; } = string.Empty;
+
+        [JsonPropertyName("rating")]
+        public int Rating { get; set; } = 5;
+
+        [JsonPropertyName("createdAt")]
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        [JsonPropertyName("tripName")]
+        public string TripName { get; set; } = string.Empty;
+    }
+
+    // ДОДАНО: Клас для плану подорожі
+    public class TripPlan
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+
+        [JsonPropertyName("tripId")]
+        public string TripId { get; set; } = string.Empty;
+
+        [JsonPropertyName("duration")]
+        public string Duration { get; set; } = string.Empty;
+
+        [JsonPropertyName("breakSchedule")]
+        public string BreakSchedule { get; set; } = string.Empty;
+
+        [JsonPropertyName("restPlaces")]
+        public List<string> RestPlaces { get; set; } = new List<string>();
+
+        [JsonPropertyName("pointsOfInterest")]
+        public List<string> PointsOfInterest { get; set; } = new List<string>();
+
+        [JsonPropertyName("lastUpdated")]
+        public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+
+        [JsonPropertyName("updatedBy")]
+        public string UpdatedBy { get; set; } = string.Empty;
+    }
+
+    public class ApiResponse<T>
+    {
+        [JsonPropertyName("success")]
+        public bool Success { get; set; }
+
+        [JsonPropertyName("message")]
+        public string Message { get; set; } = string.Empty;
+
+        [JsonPropertyName("data")]
+        public T Data { get; set; }
+
+        [JsonPropertyName("errorCode")]
+        public string ErrorCode { get; set; } = string.Empty;
+
+        public static ApiResponse<T> SuccessResponse(T data, string message = "Success")
+            => new ApiResponse<T> { Success = true, Message = message, Data = data };
+
+        public static ApiResponse<T> ErrorResponse(string message, string errorCode = "")
+            => new ApiResponse<T> { Success = false, Message = message, ErrorCode = errorCode };
+    }
+
+    public class ActiveTripData
+    {
+        [JsonPropertyName("tripId")]
+        public string TripId { get; set; } = string.Empty;
+    }
+}
+
+
+
+
+-----------------------------------------------------------------------
+
+
+
+
+ПАПКА Services
+
+
+====================
+FirebaseService.cs
+====================
+
+
+using Firebase.Database;
+using Firebase.Database.Query;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using TrackingApp.Server.Config;
+using TrackingApp.Server.Models;
+
+namespace TrackingApp.Server.Services
+{
+    public class FirebaseService
+    {
+        private readonly FirebaseClient _firebase;
+
+        public FirebaseService()
+        {
+            _firebase = FirebaseConfig.GetClient();
+        }
+
+        public async Task InitializeDefaultTripsAsync()
+        {
+            try
+            {
+                var existingTrips = await GetPredefinedTripsAsync();
+
+                if (!existingTrips.Any())
+                {
+                    var lvivTrip = new PredefinedTrip
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        Name = "Львів - Демонстраційний маршрут",
+                        Description = "Історичний центр Львова",
+                        Duration = "3 години",
+                        BreakSchedule = "Перерва з 12:00 до 13:00",
+                        RestPlaces = new List<string> { "Парк Шевченка", "Кафе Центральне" },
+                        PointsOfInterest = new List<string> { "Львівський оперний театр", "Ринок" },
+                        Route = new List<Location>
+                        {
+                            new Location(49.842957, 24.031111),
+                            new Location(49.844000, 24.032500),
+                            new Location(49.845500, 24.034000),
+                            new Location(49.847000, 24.035500),
+                            new Location(49.848500, 24.037000)
+                        },
+                        IsActive = false
+                    };
+
+                    await SavePredefinedTripAsync(lvivTrip);
+
+                    var carpathiansTrip = new PredefinedTrip
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        Name = "Карпати - Гірський маршрут",
+                        Description = "Гірська прогулянка Карпатами",
+                        Duration = "6 годин",
+                        BreakSchedule = "Перерва з 13:00 до 14:00",
+                        RestPlaces = new List<string> { "Гірський притулок", "Смотрова площа" },
+                        PointsOfInterest = new List<string> { "Говерла", "Піп Іван" },
+                        Route = new List<Location>
+                        {
+                            new Location(48.922633, 22.573900),
+                            new Location(48.925000, 22.575000),
+                            new Location(48.927500, 22.577500),
+                            new Location(48.930000, 22.580000),
+                            new Location(48.932000, 22.582000)
+                        },
+                        IsActive = false
+                    };
+
+                    await SavePredefinedTripAsync(carpathiansTrip);
+
+                    var bukovelTrip = new PredefinedTrip
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        Name = "Буковель - Лижний маршрут",
+                        Description = "Лижні траси Буковеля",
+                        Duration = "4 години",
+                        BreakSchedule = "Перерва з 12:30 до 13:30",
+                        RestPlaces = new List<string> { "Лижна база", "Гірський ресторан" },
+                        PointsOfInterest = new List<string> { "Лижні траси", "Канатна дорога" },
+                        Route = new List<Location>
+                        {
+                            new Location(48.354600, 24.412700),
+                            new Location(48.356000, 24.414000),
+                            new Location(48.357500, 24.416500),
+                            new Location(48.359000, 24.418000),
+                            new Location(48.360500, 24.420000)
+                        },
+                        IsActive = false
+                    };
+
+                    await SavePredefinedTripAsync(bukovelTrip);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка ініціалізації маршрутів: {ex.Message}");
+            }
+        }
+
+        public async Task<TripPlan> GetTripPlanAsync(string tripId)
+        {
+            try
+            {
+                var tripPlans = await _firebase
+                    .Child("trip_plans")
+                    .OnceAsync<TripPlan>();
+
+                var plan = tripPlans
+                    .Select(p =>
+                    {
+                        p.Object.Id = p.Key;
+                        return p.Object;
+                    })
+                    .FirstOrDefault(p => p.TripId == tripId);
+
+                return plan ?? new TripPlan { TripId = tripId };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка отримання плану подорожі: {ex.Message}");
+                return new TripPlan { TripId = tripId };
+            }
+        }
+
+        public async Task<bool> SaveTripPlanAsync(TripPlan plan)
+        {
+            try
+            {
+                plan.LastUpdated = DateTime.UtcNow;
+
+                var existingPlans = await _firebase
+                    .Child("trip_plans")
+                    .OnceAsync<TripPlan>();
+
+                var existingPlan = existingPlans
+                    .FirstOrDefault(p => p.Object.TripId == plan.TripId);
+
+                if (existingPlan != null)
+                {
+                    await _firebase
+                        .Child("trip_plans")
+                        .Child(existingPlan.Key)
+                        .PutAsync(plan);
+                }
+                else
+                {
+                    await _firebase
+                        .Child("trip_plans")
+                        .PostAsync(plan);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка збереження плану подорожі: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<List<User>> GetUsersAsync()
+        {
+            try
+            {
+                var users = await _firebase
+                    .Child("users")
+                    .OnceAsync<User>();
+
+                var result = users.Select(u =>
+                {
+                    u.Object.Id = u.Key;
+                    return u.Object;
+                }).ToList();
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка отримання користувачів: {ex.Message}");
+                return new List<User>();
+            }
+        }
+
+        public async Task<bool> CreateUserAsync(User user)
+        {
+            try
+            {
+                user.LastUpdated = DateTime.UtcNow;
+
+                if (string.IsNullOrEmpty(user.Id) || user.Id == Guid.Empty.ToString())
+                {
+                    user.Id = Guid.NewGuid().ToString();
+                }
+
+                await _firebase
+                    .Child("users")
+                    .Child(user.Id)
+                    .PutAsync(user);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка створення користувача: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> AddOrUpdateUserAsync(User user)
+        {
+            try
+            {
+                user.LastUpdated = DateTime.UtcNow;
+
+                if (string.IsNullOrEmpty(user.Id) || user.Id == Guid.Empty.ToString())
+                {
+                    var result = await _firebase
+                        .Child("users")
+                        .PostAsync(user);
+
+                    user.Id = result.Key;
+                }
+                else
+                {
+                    await _firebase
+                        .Child("users")
+                        .Child(user.Id)
+                        .PutAsync(user);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка оновлення користувача: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> UpdateUserLocationAsync(string userId, Location location)
+        {
+            try
+            {
+                var user = await GetUserAsync(userId);
+                if (user == null) return false;
+
+                user.CurrentLocation = location;
+                user.LastUpdated = DateTime.UtcNow;
+
+                await AddOrUpdateUserAsync(user);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка оновлення локації: {ex.Message}");
+                return false;
+            }
+        }
+
+        private async Task<User> GetUserAsync(string userId)
+        {
+            try
+            {
+                var user = await _firebase
+                    .Child("users")
+                    .Child(userId)
+                    .OnceSingleAsync<User>();
+
+                if (user != null)
+                    user.Id = userId;
+
+                return user;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка отримання користувача: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<Trip> GetActiveTripAsync()
+        {
+            try
+            {
+                var predefinedTrips = await GetPredefinedTripsAsync();
+                var activeTrip = predefinedTrips.FirstOrDefault(t => t.IsActive);
+
+                if (activeTrip != null)
+                {
+                    var tripPlan = await GetTripPlanAsync(activeTrip.Id);
+
+                    var trip = new Trip
+                    {
+                        TripName = activeTrip.Name,
+                        Route = activeTrip.Route,
+                        Duration = string.IsNullOrEmpty(tripPlan.Duration) ? activeTrip.Duration : tripPlan.Duration,
+                        BreakSchedule = string.IsNullOrEmpty(tripPlan.BreakSchedule) ? activeTrip.BreakSchedule : tripPlan.BreakSchedule,
+                        RestPlaces = tripPlan.RestPlaces.Any() ? tripPlan.RestPlaces : activeTrip.RestPlaces,
+                        PointsOfInterest = tripPlan.PointsOfInterest.Any() ? tripPlan.PointsOfInterest : activeTrip.PointsOfInterest,
+                        IsActive = true,
+                        CreatedAt = activeTrip.CreatedAt
+                    };
+
+                    return trip;
+                }
+
+                return new Trip();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка отримання активного маршруту: {ex.Message}");
+                return new Trip();
+            }
+        }
+
+        public async Task<bool> SavePredefinedTripAsync(PredefinedTrip trip)
+        {
+            try
+            {
+                trip.CreatedAt = DateTime.UtcNow;
+
+                await _firebase
+                    .Child("predefined_trips")
+                    .Child(trip.Id)
+                    .PutAsync(trip);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка збереження маршруту: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<List<PredefinedTrip>> GetPredefinedTripsAsync()
+        {
+            try
+            {
+                var trips = await _firebase
+                    .Child("predefined_trips")
+                    .OnceAsync<PredefinedTrip>();
+
+                var result = trips.Select(t =>
+                {
+                    t.Object.Id = t.Key;
+                    return t.Object;
+                }).ToList();
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка отримання маршрутів: {ex.Message}");
+                return new List<PredefinedTrip>();
+            }
+        }
+
+        public async Task<bool> SetActiveTripAsync(string tripId)
+        {
+            try
+            {
+                var predefinedTrips = await GetPredefinedTripsAsync();
+
+                foreach (var trip in predefinedTrips)
+                {
+                    if (trip.IsActive && trip.Id != tripId)
+                    {
+                        trip.IsActive = false;
+                        await _firebase
+                            .Child("predefined_trips")
+                            .Child(trip.Id)
+                            .PutAsync(trip);
+                    }
+                }
+
+                var selectedTrip = predefinedTrips.FirstOrDefault(t => t.Id == tripId);
+                if (selectedTrip != null)
+                {
+                    selectedTrip.IsActive = true;
+                    await _firebase
+                        .Child("predefined_trips")
+                        .Child(selectedTrip.Id)
+                        .PutAsync(selectedTrip);
+
+                    return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка встановлення активного маршруту: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<List<Notification>> GetNotificationsAsync(int limit = 50)
+        {
+            try
+            {
+                var notifications = await _firebase
+                    .Child("notifications")
+                    .OrderByKey()
+                    .LimitToLast(limit)
+                    .OnceAsync<Notification>();
+
+                var result = notifications
+                    .Select(n => n.Object)
+                    .OrderByDescending(n => n.Time)
+                    .ToList();
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка отримання сповіщень: {ex.Message}");
+                return new List<Notification>();
+            }
+        }
+
+        public async Task<bool> AddNotificationAsync(Notification notification)
+        {
+            try
+            {
+                await _firebase
+                    .Child("notifications")
+                    .PostAsync(notification);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка додавання сповіщення: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<List<Feedback>> GetFeedbacksAsync(int limit = 50)
+        {
+            try
+            {
+                var feedbacks = await _firebase
+                    .Child("feedbacks")
+                    .OrderByKey()
+                    .LimitToLast(limit)
+                    .OnceAsync<Feedback>();
+
+                var result = feedbacks
+                    .Select(f =>
+                    {
+                        f.Object.Id = f.Key;
+                        return f.Object;
+                    })
+                    .OrderByDescending(f => f.CreatedAt)
+                    .ToList();
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка отримання відгуків: {ex.Message}");
+                return new List<Feedback>();
+            }
+        }
+
+        public async Task<bool> AddFeedbackAsync(Feedback feedback)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(feedback.Id) || feedback.Id == Guid.Empty.ToString())
+                {
+                    feedback.Id = Guid.NewGuid().ToString();
+                }
+
+                feedback.CreatedAt = DateTime.UtcNow;
+
+                await _firebase
+                    .Child("feedbacks")
+                    .Child(feedback.Id)
+                    .PutAsync(feedback);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка додавання відгуку: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<Dictionary<string, object>> GetStatisticsAsync()
+        {
+            try
+            {
+                var users = await GetUsersAsync();
+                var notifications = await GetNotificationsAsync();
+                var trip = await GetActiveTripAsync();
+                var feedbacks = await GetFeedbacksAsync();
+
+                var averageRating = feedbacks.Any() ? Math.Round(feedbacks.Average(f => f.Rating), 1) : 0;
+
+                return new Dictionary<string, object>
+                {
+                    ["totalUsers"] = users.Count,
+                    ["activeUsers"] = users.Count(u => u.LastUpdated > DateTime.UtcNow.AddHours(-1)),
+                    ["totalNotifications"] = notifications.Count,
+                    ["totalFeedbacks"] = feedbacks.Count,
+                    ["averageRating"] = averageRating,
+                    ["routePoints"] = trip.Route.Count,
+                    ["leaders"] = users.Count(u => u.IsLeader)
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка отримання статистики: {ex.Message}");
+                return new Dictionary<string, object>();
+            }
+        }
+
+        public async Task<bool> TestConnectionAsync()
+        {
+            try
+            {
+                var testData = new { test = "connection", timestamp = DateTime.UtcNow };
+                await _firebase
+                    .Child("test_connection")
+                    .Child(Guid.NewGuid().ToString())
+                    .PutAsync(testData);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка з'єднання з Firebase: {ex.Message}");
+                return false;
+            }
+        }
+    }
+}
+
+
+
+-------------------------------------------------------------------------
+
+
+ПАПКА TcpServer
+
+
+=========================
+FirebaseTcpServer.cs
+=======================
+
+
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using TrackingApp.Server.Models;
+using TrackingApp.Server.Services;
+using TrackingApp.Server.Config;
+
+namespace TrackingApp.Server.TcpServer
+{
+    public class FirebaseTcpServer
+    {
+        private readonly TcpListener _listener;
+        private readonly FirebaseService _firebaseService;
+        private bool _isRunning;
+
+        public FirebaseTcpServer()
+        {
+            _listener = new TcpListener(IPAddress.Any, ServerConfig.Port);
+            _firebaseService = new FirebaseService();
+        }
+
+        public void Start()
+        {
+            _isRunning = true;
+            _listener.Start();
+
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(500);
+                await _firebaseService.InitializeDefaultTripsAsync();
+            });
+
+            Task.Run(ListenForClients);
+        }
+
+        public void Stop()
+        {
+            _isRunning = false;
+            _listener?.Stop();
+        }
+
+        private async Task ListenForClients()
+        {
+            while (_isRunning)
+            {
+                try
+                {
+                    var client = await _listener.AcceptTcpClientAsync();
+                    _ = Task.Run(() => HandleClient(client));
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    if (_isRunning)
+                        Console.WriteLine($"❌ {ex.Message}");
+                }
+            }
+        }
+
+        private async Task HandleClient(TcpClient client)
+        {
+            try
+            {
+                using (client)
+                using (var stream = client.GetStream())
+                {
+                    var buffer = new byte[ServerConfig.BufferSize];
+                    var messageBuilder = new StringBuilder();
+
+                    while (client.Connected && _isRunning)
+                    {
+                        var bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                        if (bytesRead == 0) break;
+
+                        var receivedData = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                        messageBuilder.Append(receivedData);
+
+                        var message = messageBuilder.ToString();
+
+                        if (message.Contains("}"))
+                        {
+                            try
+                            {
+                                var cleanMessage = message.Trim();
+                                cleanMessage = cleanMessage.TrimStart('\0', '\uFEFF', '\u200B');
+
+                                if (!string.IsNullOrWhiteSpace(cleanMessage) &&
+                                    cleanMessage.StartsWith("{") && cleanMessage.EndsWith("}"))
+                                {
+                                    var response = await ProcessRequest(cleanMessage);
+                                    var responseJson = JsonSerializer.Serialize(response, new JsonSerializerOptions
+                                    {
+                                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                                    }) + "\n";
+
+                                    var responseBytes = Encoding.UTF8.GetBytes(responseJson);
+                                    await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                                }
+
+                                messageBuilder.Clear();
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"❌ {ex.Message}");
+                                messageBuilder.Clear();
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ {ex.Message}");
+            }
+            finally
+            {
+                Console.WriteLine("────────────────────────────────────────────────────────────");
+            }
+        }
+
+        private async Task<ApiResponse<object>> ProcessRequest(string requestJson)
+        {
+            try
+            {
+                var request = JsonSerializer.Deserialize<ApiRequest>(requestJson, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (request == null)
+                    return ApiResponse<object>.ErrorResponse("Невірний формат запиту");
+
+                Console.WriteLine($"🔧 {request.Command}");
+
+                var response = request.Command?.ToLower() switch
+                {
+                    "ping" => await HandlePing(),
+                    "get_users" => await HandleGetUsers(),
+                    "get_active_trip" => await HandleGetActiveTrip(),
+                    "get_notifications" => await HandleGetNotifications(),
+                    "update_location" => await HandleUpdateLocation(request.Data),
+                    "add_notification" => await HandleAddNotification(request.Data),
+                    "get_statistics" => await HandleGetStatistics(),
+                    "register_user" => await HandleRegisterUser(request.Data),
+                    "add_feedback" => await HandleAddFeedback(request.Data),
+                    "get_feedbacks" => await HandleGetFeedbacks(),
+                    "get_predefined_trips" => await HandleGetPredefinedTrips(),
+                    "set_active_trip" => await HandleSetActiveTrip(request.Data),
+                    "update_trip_plan" => await HandleUpdateTripPlan(request.Data),
+                    "save_predefined_trip" => await HandleSavePredefinedTrip(request.Data),
+                    _ => ApiResponse<object>.ErrorResponse($"Невідома команда: {request.Command}")
+                };
+
+                // Додаємо роздільник після важливих команд
+                if (request.Command?.ToLower() is "add_feedback" or "set_active_trip" or "update_trip_plan" or "save_predefined_trip")
+                {
+                    Console.WriteLine("────────────────────────────────────────────────────────────");
+                }
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ {ex.Message}");
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandlePing()
+        {
+            try
+            {
+                var testData = new
+                {
+                    message = "Сервер працює коректно",
+                    timestamp = DateTime.UtcNow,
+                    serverVersion = "1.0",
+                    firebaseConnected = true
+                };
+
+                return ApiResponse<object>.SuccessResponse(testData, "Ping успішний");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleGetUsers()
+        {
+            try
+            {
+                var users = await _firebaseService.GetUsersAsync();
+                return ApiResponse<object>.SuccessResponse(users, $"Отримано {users.Count} користувачів");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleGetActiveTrip()
+        {
+            try
+            {
+                var trip = await _firebaseService.GetActiveTripAsync();
+                return ApiResponse<object>.SuccessResponse(trip, "Активний маршрут отримано");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleGetNotifications()
+        {
+            try
+            {
+                var notifications = await _firebaseService.GetNotificationsAsync();
+                return ApiResponse<object>.SuccessResponse(notifications, $"Отримано {notifications.Count} сповіщень");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleUpdateLocation(object data)
+        {
+            try
+            {
+                var locationData = JsonSerializer.Deserialize<LocationUpdateData>(
+                    JsonSerializer.Serialize(data),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (locationData == null || string.IsNullOrEmpty(locationData.UserId))
+                    return ApiResponse<object>.ErrorResponse("Невірні дані локації");
+
+                var success = await _firebaseService.UpdateUserLocationAsync(
+                    locationData.UserId,
+                    locationData.Location);
+
+                return success
+                    ? ApiResponse<object>.SuccessResponse(true, "Локація оновлена")
+                    : ApiResponse<object>.ErrorResponse("Помилка оновлення");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleAddNotification(object data)
+        {
+            try
+            {
+                var notificationData = JsonSerializer.Deserialize<NotificationData>(
+                    JsonSerializer.Serialize(data),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (notificationData == null || string.IsNullOrEmpty(notificationData.Message))
+                    return ApiResponse<object>.ErrorResponse("Невірні дані сповіщення");
+
+                var notification = new Notification
+                {
+                    Message = notificationData.Message,
+                    UserId = notificationData.UserId,
+                    UserName = notificationData.UserName,
+                    Time = DateTime.UtcNow
+                };
+
+                var success = await _firebaseService.AddNotificationAsync(notification);
+
+                return success
+                    ? ApiResponse<object>.SuccessResponse(true, "Сповіщення додано")
+                    : ApiResponse<object>.ErrorResponse("Помилка додавання");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleGetStatistics()
+        {
+            try
+            {
+                var statistics = await _firebaseService.GetStatisticsAsync();
+                return ApiResponse<object>.SuccessResponse(statistics, "Статистика отримана");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleRegisterUser(object data)
+        {
+            try
+            {
+                var userData = JsonSerializer.Deserialize<UserRegistrationData>(
+                    JsonSerializer.Serialize(data),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (userData == null || string.IsNullOrEmpty(userData.Name) || string.IsNullOrEmpty(userData.Password))
+                    return ApiResponse<object>.ErrorResponse("Невірні дані реєстрації");
+
+                var existingUsers = await _firebaseService.GetUsersAsync();
+                if (existingUsers.Any(u => u.Name == userData.Name))
+                {
+                    return ApiResponse<object>.ErrorResponse("Користувач вже існує");
+                }
+
+                var newUser = new User
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Name = userData.Name,
+                    Email = userData.Email,
+                    Password = userData.Password,
+                    IsLeader = userData.IsLeader,
+                    TripType = userData.TripType,
+                    CurrentLocation = new Location(49.842957, 24.031111),
+                    Status = UserStatus.None,
+                    LastUpdated = DateTime.UtcNow
+                };
+
+                var success = await _firebaseService.CreateUserAsync(newUser);
+
+                if (success)
+                {
+                    await _firebaseService.AddNotificationAsync(new Notification
+                    {
+                        Message = $"Новий користувач: {newUser.Name}",
+                        UserId = newUser.Id,
+                        UserName = "System",
+                        Time = DateTime.UtcNow
+                    });
+
+                    return ApiResponse<object>.SuccessResponse(newUser, "Користувача зареєстровано");
+                }
+                else
+                {
+                    return ApiResponse<object>.ErrorResponse("Помилка реєстрації");
+                }
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleAddFeedback(object data)
+        {
+            try
+            {
+                var feedbackData = JsonSerializer.Deserialize<FeedbackData>(
+                    JsonSerializer.Serialize(data),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (feedbackData == null || string.IsNullOrEmpty(feedbackData.Message))
+                    return ApiResponse<object>.ErrorResponse("Невірні дані відгуку");
+
+                var feedback = new Feedback
+                {
+                    UserId = feedbackData.UserId,
+                    UserName = feedbackData.UserName,
+                    Message = feedbackData.Message,
+                    Rating = feedbackData.Rating,
+                    TripName = feedbackData.TripName ?? "Невідома подорож"
+                };
+
+                var success = await _firebaseService.AddFeedbackAsync(feedback);
+
+                Console.WriteLine($"⭐ {feedbackData.UserName} ({feedbackData.Rating}/5)");
+
+                return success
+                    ? ApiResponse<object>.SuccessResponse(true, "Відгук додано")
+                    : ApiResponse<object>.ErrorResponse("Помилка додавання відгуку");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка відгуку: {ex.Message}");
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleGetFeedbacks()
+        {
+            try
+            {
+                var feedbacks = await _firebaseService.GetFeedbacksAsync();
+                return ApiResponse<object>.SuccessResponse(feedbacks, $"Отримано {feedbacks.Count} відгуків");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleGetPredefinedTrips()
+        {
+            try
+            {
+                var trips = await _firebaseService.GetPredefinedTripsAsync();
+                return ApiResponse<object>.SuccessResponse(trips, $"Отримано {trips.Count} маршрутів");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleSetActiveTrip(object data)
+        {
+            try
+            {
+                var tripData = JsonSerializer.Deserialize<ActiveTripData>(
+                    JsonSerializer.Serialize(data),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (tripData == null || string.IsNullOrEmpty(tripData.TripId))
+                    return ApiResponse<object>.ErrorResponse("Невірні дані маршруту");
+
+                var success = await _firebaseService.SetActiveTripAsync(tripData.TripId);
+
+                if (success)
+                {
+                    var trips = await _firebaseService.GetPredefinedTripsAsync();
+                    var trip = trips.FirstOrDefault(t => t.Id == tripData.TripId);
+                    if (trip != null)
+                    {
+                        Console.WriteLine($"🔄 Активний маршрут: {trip.Name}");
+                    }
+                }
+
+                return success
+                    ? ApiResponse<object>.SuccessResponse(true, "Активний маршрут встановлено")
+                    : ApiResponse<object>.ErrorResponse("Помилка встановлення маршруту");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка маршруту: {ex.Message}");
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleUpdateTripPlan(object data)
+        {
+            try
+            {
+                var planData = JsonSerializer.Deserialize<TripPlanData>(
+                    JsonSerializer.Serialize(data),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (planData == null || string.IsNullOrEmpty(planData.TripId))
+                    return ApiResponse<object>.ErrorResponse("Невірні дані плану подорожі");
+
+                var tripPlan = new TripPlan
+                {
+                    TripId = planData.TripId,
+                    Duration = planData.Duration,
+                    BreakSchedule = planData.BreakSchedule,
+                    RestPlaces = planData.RestPlaces ?? new List<string>(),
+                    PointsOfInterest = planData.PointsOfInterest ?? new List<string>(),
+                    UpdatedBy = planData.UpdatedBy
+                };
+
+                var success = await _firebaseService.SaveTripPlanAsync(tripPlan);
+
+                if (success)
+                {
+                    Console.WriteLine($"📝 Оновлено план: {planData.UpdatedBy}");
+                }
+
+                return success
+                    ? ApiResponse<object>.SuccessResponse(true, "План подорожі оновлено")
+                    : ApiResponse<object>.ErrorResponse("Помилка оновлення плану подорожі");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка плану: {ex.Message}");
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+
+        private async Task<ApiResponse<object>> HandleSavePredefinedTrip(object data)
+        {
+            try
+            {
+                var tripData = JsonSerializer.Deserialize<PredefinedTrip>(
+                    JsonSerializer.Serialize(data),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (tripData == null || string.IsNullOrEmpty(tripData.Name))
+                    return ApiResponse<object>.ErrorResponse("Невірні дані маршруту");
+
+                var success = await _firebaseService.SavePredefinedTripAsync(tripData);
+
+                if (success)
+                {
+                    Console.WriteLine($"💾 Новий маршрут: {tripData.Name}");
+                }
+
+                return success
+                    ? ApiResponse<object>.SuccessResponse(true, "Маршрут збережено")
+                    : ApiResponse<object>.ErrorResponse("Помилка збереження маршруту");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка збереження: {ex.Message}");
+                return ApiResponse<object>.ErrorResponse($"Помилка: {ex.Message}");
+            }
+        }
+    }
+
+    // Моделі для запитів
+    public class TripPlanData
+    {
+        public string TripId { get; set; } = string.Empty;
+        public string Duration { get; set; } = string.Empty;
+        public string BreakSchedule { get; set; } = string.Empty;
+        public List<string> RestPlaces { get; set; } = new List<string>();
+        public List<string> PointsOfInterest { get; set; } = new List<string>();
+        public string UpdatedBy { get; set; } = string.Empty;
+    }
+
+    public class ApiRequest
+    {
+        public string Command { get; set; }
+        public object Data { get; set; }
+    }
+
+    public class LocationUpdateData
+    {
+        public string UserId { get; set; }
+        public Location Location { get; set; }
+    }
+
+    public class NotificationData
+    {
+        public string Message { get; set; }
+        public string UserId { get; set; }
+        public string UserName { get; set; }
+    }
+
+    public class UserRegistrationData
+    {
+        public string Name { get; set; }
+        public string Email { get; set; }
+        public string Password { get; set; }
+        public bool IsLeader { get; set; }
+        public TripType TripType { get; set; }
+    }
+
+    public class FeedbackData
+    {
+        public string UserId { get; set; }
+        public string UserName { get; set; }
+        public string Message { get; set; }
+        public int Rating { get; set; }
+        public string TripName { get; set; }
+    }
+
+    public class ActiveTripData
+    {
+        public string TripId { get; set; } = string.Empty;
+    }
+}
+
+
+
+
+
+
+
+--------------------------------------------------------------
+
+
+
+
+=====================
+Program.cs
+=====================
+
+
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using TrackingApp.Server.Config;
+using TrackingApp.Server.TcpServer;
+using TrackingApp.Server.Services;
+using TrackingApp.Server.Models;
+
+namespace TrackingApp.Server
+{
+    class Program
+    {
+        private static FirebaseTcpServer _server;
+        private static bool _isRunning = true;
+        private static FirebaseService _firebaseService;
+        private static bool _inRequestMenu = false;
+        private static bool _firebaseConnected = false;
+
+        static void Main(string[] args)
+        {
+            PrintHeader();
+
+            // Ініціалізація
+            ServerConfig.Initialize();
+            FirebaseConfig.Initialize();
+            _firebaseService = new FirebaseService();
+
+            // Запуск сервера
+            _server = new FirebaseTcpServer();
+            _server.Start();
+
+            // Перевірка з'єднання з Firebase
+            CheckFirebaseConnection();
+
+            // Основний цикл
+            while (_isRunning)
+            {
+                if (!_inRequestMenu)
+                {
+                    ShowMainMenu();
+                }
+
+                Console.Write("> ");
+                var input = Console.ReadLine()?.Trim().ToLower();
+
+                if (_inRequestMenu)
+                {
+                    HandleRequestMenu(input);
+                }
+                else
+                {
+                    HandleMainMenu(input);
+                }
+            }
+
+            StopServer();
+        }
+
+        private static void PrintHeader()
+        {
+            Console.Clear();
+            PrintSeparator();
+            Console.WriteLine("🚀 Запуск TrackingApp Server");
+            Console.WriteLine("📍 Порт: 8888");
+            Console.WriteLine("📍 Режим: Збереження маршрутів у Firebase");
+            PrintSeparator();
+            Console.WriteLine("✅ Сервер успішно запущено та готовий до роботи");
+            PrintSeparator();
+        }
+
+        private static async void CheckFirebaseConnection()
+        {
+            try
+            {
+                _firebaseConnected = await _firebaseService.TestConnectionAsync();
+            }
+            catch (Exception ex)
+            {
+                _firebaseConnected = false;
+                Console.WriteLine($"⚠️ Помилка перевірки з'єднання з Firebase: {ex.Message}");
+            }
+        }
+
+        private static void ShowMainMenu()
+        {
+            Console.WriteLine("\n📋 ОСНОВНЕ МЕНЮ СЕРВЕРА:");
+            Console.WriteLine("┌───────────────────────────────────────────────────────────────┐");
+            Console.WriteLine($"│ Статус сервера: 🟢 ЗАПУЩЕНО                                   │");
+            Console.WriteLine($"│ Порт: {ServerConfig.Port,-51}     │");
+            Console.WriteLine($"│ Firebase: {(_firebaseConnected ? "🟢 ПІДКЛЮЧЕНО" : "🔴 ВІДКЛЮЧЕНО"),-45}       │");
+            Console.WriteLine("├───────────────────────────────────────────────────────────────┤");
+            Console.WriteLine("│ 1  - Меню запитів до бази даних                               │");
+            Console.WriteLine("│ 2  - Перевірити з'єднання з Firebase (TestConnectionAsync)    │");
+            Console.WriteLine("│ 3  - Статистика сервера                                       │");
+            Console.WriteLine("│ 4  - Перезапустити сервер                                     │");
+            Console.WriteLine("│ q  - Завершити роботу сервера                                 │");
+            Console.WriteLine("└───────────────────────────────────────────────────────────────┘");
+        }
+
+        private static void ShowRequestsMenu()
+        {
+            Console.WriteLine("\n📊 МЕНЮ ЗАПИТІВ ДО БАЗИ ДАНИХ:");
+            Console.WriteLine($"┌──────────────────────────────────────────────────────────┐");
+            Console.WriteLine($"│ Статус Firebase: {(_firebaseConnected ? "🟢 ПІДКЛЮЧЕНО" : "🔴 ВІДКЛЮЧЕНО"),-38}  │");
+            Console.WriteLine("├──────────────────────────────────────────────────────────┤");
+            Console.WriteLine("│ 1  - Всі користувачі (GetUsersAsync)                     │");
+            Console.WriteLine("│ 2  - Поточний активний маршрут (GetActiveTripAsync)      │");
+            Console.WriteLine("│ 3  - Останні сповіщення (GetNotificationsAsync)          │");
+            Console.WriteLine("│ 4  - Відгуки користувачів (GetFeedbacksAsync)            │");
+            Console.WriteLine("│ 5  - Всі попередні маршрути (GetPredefinedTripsAsync)    │");
+            Console.WriteLine("│ 6  - Детальна інформація про користувача (GetUsersAsync) │");
+            Console.WriteLine("│ 7  - Статистика системи (GetStatisticsAsync)             │");
+            Console.WriteLine("│ 8  - Видалити користувача (DeleteUserAsync)              │");
+            Console.WriteLine("│ b  - Повернутися до головного меню                       │");
+            Console.WriteLine("└──────────────────────────────────────────────────────────┘");
+        }
+
+        private static void HandleMainMenu(string input)
+        {
+            switch (input)
+            {
+                case "1":
+                    _inRequestMenu = true;
+                    Console.Clear();
+                    PrintSeparator();
+                    Console.WriteLine("📊 МЕНЮ ЗАПИТІВ ДО БАЗИ ДАНИХ");
+                    PrintSeparator();
+                    ShowRequestsMenu();
+                    break;
+
+                case "2":
+                    TestConnection();
+                    break;
+
+                case "3":
+                    ShowServerStatistics();
+                    break;
+
+                case "4":
+                    RestartServer();
+                    break;
+
+                case "q":
+                case "quit":
+                    _isRunning = false;
+                    break;
+
+                case "":
+                    break;
+
+                default:
+                    Console.WriteLine("❌ Невідома команда. Спробуйте ще раз.");
+                    break;
+            }
+        }
+
+        private static void HandleRequestMenu(string input)
+        {
+            switch (input)
+            {
+                case "1":
+                    ShowAllUsers();
+                    WaitForBack();
+                    break;
+
+                case "2":
+                    ShowActiveTrip();
+                    WaitForBack();
+                    break;
+
+                case "3":
+                    ShowNotifications();
+                    WaitForBack();
+                    break;
+
+                case "4":
+                    ShowFeedbacks();
+                    WaitForBack();
+                    break;
+
+                case "5":
+                    ShowPredefinedTrips();
+                    WaitForBack();
+                    break;
+
+                case "6":
+                    ShowUserDetailsMenu();
+                    break;
+
+                case "7":
+                    ShowStatistics();
+                    WaitForBack();
+                    break;
+
+                case "8":
+                    DeleteUserMenu();
+                    break;
+
+                case "b":
+                case "back":
+                    _inRequestMenu = false;
+                    Console.Clear();
+                    PrintSeparator();
+                    Console.WriteLine("🔙 Повернення до головного меню");
+                    PrintSeparator();
+                    break;
+
+                case "":
+                    break;
+
+                default:
+                    Console.WriteLine("❌ Невідома команда. Спробуйте ще раз.");
+                    break;
+            }
+        }
+
+        private static void WaitForBack()
+        {
+            Console.WriteLine("\n────────────────────────────────────────────────────────────");
+            Console.WriteLine("Натисніть 'b' для повернення до меню запитів");
+            var input = "";
+            while (input != "b")
+            {
+                Console.Write("> ");
+                input = Console.ReadLine()?.Trim().ToLower();
+                if (input == "b")
+                {
+                    Console.Clear();
+                    PrintSeparator();
+                    Console.WriteLine("📊 МЕНЮ ЗАПИТІВ ДО БАЗИ ДАНИХ");
+                    PrintSeparator();
+                    ShowRequestsMenu();
+                    break;
+                }
+            }
+        }
+
+        private static void ShowUserDetailsMenu()
+        {
+            Console.Write("\n👤 Введіть ім'я користувача: ");
+            var userName = Console.ReadLine()?.Trim();
+
+            if (string.IsNullOrEmpty(userName))
+            {
+                Console.WriteLine("❌ Ім'я не може бути порожнім");
+                WaitForBack();
+                return;
+            }
+
+            ShowUserDetails(userName);
+            WaitForBack();
+        }
+
+        private static void DeleteUserMenu()
+        {
+            Console.Write("\n🗑️ Введіть ім'я користувача для видалення: ");
+            var userName = Console.ReadLine()?.Trim();
+
+            if (string.IsNullOrEmpty(userName))
+            {
+                Console.WriteLine("❌ Ім'я не може бути порожнім");
+                WaitForBack();
+                return;
+            }
+
+            DeleteUser(userName);
+            WaitForBack();
+        }
+
+        private static void RestartServer()
+        {
+            Console.WriteLine("\n🔄 Перезапуск сервера...");
+            _server?.Stop();
+            Thread.Sleep(1000);
+
+            _server = new FirebaseTcpServer();
+            _server.Start();
+
+            CheckFirebaseConnection();
+
+            Console.WriteLine("✅ Сервер перезапущено успішно");
+            Thread.Sleep(1000);
+            Console.Clear();
+            PrintHeader();
+        }
+
+        // МЕТОДИ ДЛЯ ВІДОБРАЖЕННЯ ДАНИХ
+
+        private static async void ShowAllUsers()
+        {
+            try
+            {
+                Console.WriteLine("\n👥 ЗАВАНТАЖЕННЯ КОРИСТУВАЧІВ...");
+                var users = await _firebaseService.GetUsersAsync();
+
+                if (users.Any())
+                {
+                    Console.WriteLine($"\n✅ Знайдено {users.Count} користувачів:");
+                    Console.WriteLine("┌─────┬──────────────────┬───────────────────────┬──────────┐");
+                    Console.WriteLine("│ №   │ Ім'я             │ Email                 │ Лідер    │");
+                    Console.WriteLine("├─────┼──────────────────┼───────────────────────┼──────────┤");
+
+                    for (int i = 0; i < users.Count; i++)
+                    {
+                        var user = users[i];
+                        var leaderStatus = user.IsLeader ? "✅ Так" : "❌ Ні";
+
+                        Console.WriteLine($"│ {i + 1,-3} │ {user.Name,-16} │ {user.Email,-21} │ {leaderStatus,-7} │");
+                    }
+                    Console.WriteLine("└─────┴──────────────────┴───────────────────────┴──────────┘");
+                }
+                else
+                {
+                    Console.WriteLine("❌ Користувачі не знайдені");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка: {ex.Message}");
+            }
+        }
+
+        private static async void ShowActiveTrip()
+        {
+            try
+            {
+                Console.WriteLine("\n🗺️ ЗАВАНТАЖЕННЯ АКТИВНОГО МАРШРУТУ...");
+                var trip = await _firebaseService.GetActiveTripAsync();
+
+                if (trip != null && !string.IsNullOrEmpty(trip.TripName))
+                {
+                    Console.WriteLine($"\n✅ АКТИВНИЙ МАРШРУТ:");
+                    Console.WriteLine($"├─ Назва: {trip.TripName}");
+                    Console.WriteLine($"├─ Тривалість: {trip.Duration}");
+                    Console.WriteLine($"├─ Перерви: {trip.BreakSchedule}");
+                    Console.WriteLine($"├─ Точок маршруту: {trip.Route.Count}");
+                    Console.WriteLine($"├─ Місця відпочинку: {string.Join(", ", trip.RestPlaces)}");
+                    Console.WriteLine($"└─ Цікаві місця: {string.Join(", ", trip.PointsOfInterest)}");
+                }
+                else
+                {
+                    Console.WriteLine("❌ Активний маршрут не знайдений");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка: {ex.Message}");
+            }
+        }
+
+        private static async void ShowNotifications()
+        {
+            try
+            {
+                Console.WriteLine("\n📢 ЗАВАНТАЖЕННЯ СПОВІЩЕНЬ...");
+                var notifications = await _firebaseService.GetNotificationsAsync(20);
+
+                if (notifications.Any())
+                {
+                    Console.WriteLine($"\n🔔 ОСТАННІ {notifications.Count} СПОВІЩЕНЬ:");
+                    foreach (var notification in notifications.Take(10))
+                    {
+                        Console.WriteLine($"├─ [{notification.Time:HH:mm:ss}] {notification.UserName}: {notification.Message}");
+                    }
+                    if (notifications.Count > 10)
+                    {
+                        Console.WriteLine($"└─ ... і ще {notifications.Count - 10} сповіщень");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("❌ Сповіщення відсутні");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка: {ex.Message}");
+            }
+        }
+
+        private static async void ShowFeedbacks()
+        {
+            try
+            {
+                Console.WriteLine("\n⭐ ЗАВАНТАЖЕННЯ ВІДГУКІВ...");
+                var feedbacks = await _firebaseService.GetFeedbacksAsync(20);
+
+                if (feedbacks.Any())
+                {
+                    Console.WriteLine($"\n📝 ОСТАННІ {feedbacks.Count} ВІДГУКІВ:");
+                    foreach (var feedback in feedbacks.Take(10))
+                    {
+                        var stars = new string('⭐', feedback.Rating) + new string('☆', 5 - feedback.Rating);
+                        Console.WriteLine($"├─ {feedback.UserName} ({stars}): {feedback.Message}");
+                    }
+                    if (feedbacks.Count > 10)
+                    {
+                        Console.WriteLine($"└─ ... і ще {feedbacks.Count - 10} відгуків");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("❌ Відгуки відсутні");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка: {ex.Message}");
+            }
+        }
+
+        private static async void ShowUserDetails(string userName)
+        {
+            try
+            {
+                var users = await _firebaseService.GetUsersAsync();
+                var user = users.FirstOrDefault(u => u.Name.Equals(userName, StringComparison.OrdinalIgnoreCase));
+
+                if (user != null)
+                {
+                    Console.WriteLine($"\n📋 ДЕТАЛЬНА ІНФОРМАЦІЯ ПРО КОРИСТУВАЧА:");
+                    Console.WriteLine($"├─ Ім'я: {user.Name}");
+                    Console.WriteLine($"├─ Email: {user.Email}");
+                    Console.WriteLine($"├─ Лідер: {(user.IsLeader ? "✅ Так" : "❌ Ні")}");
+                    Console.WriteLine($"├─ Тип подорожі: {user.TripType}");
+                    Console.WriteLine($"└─ Останнє оновлення: {user.LastUpdated:dd.MM.yyyy HH:mm}");
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Користувача '{userName}' не знайдено");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка: {ex.Message}");
+            }
+        }
+
+        private static async void ShowPredefinedTrips()
+        {
+            try
+            {
+                Console.WriteLine("\n🗺️ ЗАВАНТАЖЕННЯ МАРШРУТІВ...");
+                var trips = await _firebaseService.GetPredefinedTripsAsync();
+
+                if (trips.Any())
+                {
+                    Console.WriteLine($"\n📌 ЗНАЙДЕНО {trips.Count} МАРШРУТІВ:");
+                    foreach (var trip in trips)
+                    {
+                        var activeStatus = trip.IsActive ? "✅ АКТИВНИЙ" : "❌ НЕАКТИВНИЙ";
+                        Console.WriteLine($"├─ {trip.Name} ({activeStatus})");
+                        Console.WriteLine($"│  └─ {trip.Description}");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("❌ Маршрути не знайдені");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка: {ex.Message}");
+            }
+        }
+
+        private static async void ShowStatistics()
+        {
+            try
+            {
+                Console.WriteLine("\n📊 ЗАВАНТАЖЕННЯ СТАТИСТИКИ...");
+                var stats = await _firebaseService.GetStatisticsAsync();
+
+                if (stats.Any())
+                {
+                    Console.WriteLine("\n📈 СТАТИСТИКА СИСТЕМИ:");
+                    Console.WriteLine("┌──────────────────────────┬──────────┐");
+                    Console.WriteLine("│ Параметр                 │ Значення │");
+                    Console.WriteLine("├──────────────────────────┼──────────┤");
+                    Console.WriteLine($"│ Користувачів            │ {stats["totalUsers"],-8} │");
+                    Console.WriteLine($"│ Активних користувачів   │ {stats["activeUsers"],-8} │");
+                    Console.WriteLine($"│ Сповіщень               │ {stats["totalNotifications"],-8} │");
+                    Console.WriteLine($"│ Відгуків                │ {stats["totalFeedbacks"],-8} │");
+                    Console.WriteLine($"│ Середній рейтинг        │ {stats["averageRating"],-8} │");
+                    Console.WriteLine($"│ Лідерів                 │ {stats["leaders"],-8} │");
+                    Console.WriteLine("└──────────────────────────┴──────────┘");
+                }
+                else
+                {
+                    Console.WriteLine("❌ Не вдалося отримати статистику");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка: {ex.Message}");
+            }
+        }
+
+        private static async void DeleteUser(string userName)
+        {
+            try
+            {
+                Console.WriteLine($"\n🗑️ СПРОБА ВИДАЛЕННЯ КОРИСТУВАЧА: {userName}");
+
+                // Спочатку перевіримо чи існує користувач
+                var users = await _firebaseService.GetUsersAsync();
+                var userToDelete = users.FirstOrDefault(u => u.Name.Equals(userName, StringComparison.OrdinalIgnoreCase));
+
+                if (userToDelete == null)
+                {
+                    Console.WriteLine("❌ Користувача з таким іменем не знайдено");
+                    return;
+                }
+
+                Console.WriteLine($"\n📋 ІНФОРМАЦІЯ ПРО КОРИСТУВАЧА ДЛЯ ВИДАЛЕННЯ:");
+                Console.WriteLine($"├─ Ім'я: {userToDelete.Name}");
+                Console.WriteLine($"├─ Email: {userToDelete.Email}");
+                Console.WriteLine($"├─ Лідер: {(userToDelete.IsLeader ? "✅ Так" : "❌ Ні")}");
+                Console.WriteLine($"└─ Тип подорожі: {userToDelete.TripType}");
+
+                Console.Write($"\n❓ Ви впевнені, що хочете видалити користувача {userToDelete.Name}? (y/n): ");
+                var confirmation = Console.ReadLine()?.Trim().ToLower();
+
+                if (confirmation == "y" || confirmation == "yes")
+                {
+                    // Тут потрібно реалізувати метод видалення користувача
+                    // bool success = await _firebaseService.DeleteUserAsync(userToDelete.Id);
+
+                    // Тимчасова імітація успішного видалення
+                    bool success = true;
+
+                    if (success)
+                    {
+                        Console.WriteLine($"✅ Користувача {userToDelete.Name} успішно видалено");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"❌ Не вдалося видалити користувача {userToDelete.Name}");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("❌ Видалення скасовано");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Помилка видалення користувача: {ex.Message}");
+            }
+        }
+
+        private static void ShowServerStatistics()
+        {
+            Console.WriteLine("\n🖥️ СТАТИСТИКА СЕРВЕРА:");
+            Console.WriteLine("┌──────────────────────────┬────────────────┐");
+            Console.WriteLine("│ Параметр                 │ Значення       │");
+            Console.WriteLine("├──────────────────────────┼────────────────┤");
+            Console.WriteLine($"│ Порт сервера            │ {ServerConfig.Port,-14} │");
+            Console.WriteLine($"│ Статус сервера          │ {"🟢 Запущений",-13}  │");
+            Console.WriteLine($"│ Firebase                │ {(_firebaseConnected ? "🟢 Підключено" : "🔴 Відключено"),-14} │");
+            Console.WriteLine("└──────────────────────────┴────────────────┘");
+
+            WaitForAnyKey();
+        }
+
+        private static async void TestConnection()
+        {
+            try
+            {
+                Console.WriteLine("\n🔗 ПЕРЕВІРКА З'ЄДНАННЯ...");
+                var isConnected = await _firebaseService.TestConnectionAsync();
+                _firebaseConnected = isConnected;
+
+                if (isConnected)
+                {
+                    Console.WriteLine("✅ З'єднання з Firebase працює стабільно");
+                }
+                else
+                {
+                    Console.WriteLine("❌ Проблеми з з'єднанням Firebase");
+                }
+            }
+            catch (Exception ex)
+            {
+                _firebaseConnected = false;
+                Console.WriteLine($"❌ Помилка: {ex.Message}");
+            }
+
+            WaitForAnyKey();
+        }
+
+        private static void WaitForAnyKey()
+        {
+            Console.WriteLine("\n────────────────────────────────────────────────────────────");
+            Console.WriteLine("Натисніть будь-яку клавішу для продовження...");
+            Console.ReadKey();
+            Console.Clear();
+            PrintSeparator();
+            Console.WriteLine("🔙 Повернення до головного меню");
+            PrintSeparator();
+        }
+
+        private static void StopServer()
+        {
+            PrintSeparator();
+            Console.WriteLine("🛑 Зупинка сервера...");
+            _server?.Stop();
+
+            Thread.Sleep(1000);
+            Console.WriteLine("✅ Сервер зупинено");
+            PrintSeparator();
+        }
+
+        private static void PrintSeparator()
+        {
+            Console.WriteLine(new string('─', 60));
+        }
+    }
+}

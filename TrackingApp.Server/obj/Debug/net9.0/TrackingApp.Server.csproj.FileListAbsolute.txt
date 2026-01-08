@@ -1,0 +1,42 @@
+C:\Users\nster\source\repos\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\nster\source\repos\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.AssemblyInfoInputs.cache
+C:\Users\nster\source\repos\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.AssemblyInfo.cs
+C:\Users\nster\source\repos\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.csproj.CoreCompileInputs.cache
+C:\Users\nster\source\repos\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.csproj.AssemblyReference.cache
+C:\Users\nster\source\repos\TrackingApp.Server\bin\Debug\net9.0\TrackingApp.Server.exe
+C:\Users\nster\source\repos\TrackingApp.Server\bin\Debug\net9.0\TrackingApp.Server.deps.json
+C:\Users\nster\source\repos\TrackingApp.Server\bin\Debug\net9.0\TrackingApp.Server.runtimeconfig.json
+C:\Users\nster\source\repos\TrackingApp.Server\bin\Debug\net9.0\TrackingApp.Server.dll
+C:\Users\nster\source\repos\TrackingApp.Server\bin\Debug\net9.0\TrackingApp.Server.pdb
+C:\Users\nster\source\repos\TrackingApp.Server\bin\Debug\net9.0\Firebase.dll
+C:\Users\nster\source\repos\TrackingApp.Server\bin\Debug\net9.0\LiteDB.dll
+C:\Users\nster\source\repos\TrackingApp.Server\bin\Debug\net9.0\Newtonsoft.Json.dll
+C:\Users\nster\source\repos\TrackingApp.Server\bin\Debug\net9.0\System.Reactive.dll
+C:\Users\nster\source\repos\TrackingApp.Server\bin\Debug\net9.0\System.Runtime.InteropServices.WindowsRuntime.dll
+C:\Users\nster\source\repos\TrackingApp.Server\obj\Debug\net9.0\Tracking.3D7F4617.Up2Date
+C:\Users\nster\source\repos\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.dll
+C:\Users\nster\source\repos\TrackingApp.Server\obj\Debug\net9.0\refint\TrackingApp.Server.dll
+C:\Users\nster\source\repos\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.pdb
+C:\Users\nster\source\repos\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.genruntimeconfig.cache
+C:\Users\nster\source\repos\TrackingApp.Server\obj\Debug\net9.0\ref\TrackingApp.Server.dll
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\bin\Debug\net9.0\TrackingApp.Server.exe
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\bin\Debug\net9.0\TrackingApp.Server.deps.json
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\bin\Debug\net9.0\TrackingApp.Server.runtimeconfig.json
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\bin\Debug\net9.0\TrackingApp.Server.dll
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\bin\Debug\net9.0\TrackingApp.Server.pdb
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\bin\Debug\net9.0\Firebase.dll
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\bin\Debug\net9.0\LiteDB.dll
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\bin\Debug\net9.0\Newtonsoft.Json.dll
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\bin\Debug\net9.0\System.Reactive.dll
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\bin\Debug\net9.0\System.Runtime.InteropServices.WindowsRuntime.dll
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.csproj.AssemblyReference.cache
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.GeneratedMSBuildEditorConfig.editorconfig
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.AssemblyInfoInputs.cache
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.AssemblyInfo.cs
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.csproj.CoreCompileInputs.cache
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\obj\Debug\net9.0\Tracking.3D7F4617.Up2Date
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.dll
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\obj\Debug\net9.0\refint\TrackingApp.Server.dll
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.pdb
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\obj\Debug\net9.0\TrackingApp.Server.genruntimeconfig.cache
+D:\3 курс\ІПЗ\Робочий проект\TrackingApp.Server\obj\Debug\net9.0\ref\TrackingApp.Server.dll
